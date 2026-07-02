@@ -1,13 +1,13 @@
 // src/components/shared/EventsColumn.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import type { CalendarEvent } from '../dashboard/CalendarColumn';
-import { TruncatedTitle } from './utils/TruncatedTitle';
-import { Pagination } from './utils/Pagination';
-import { EmptyState } from './utils/EmptyState';
-import { AddButton } from './utils/AddButton';
-import { ArrowDownIcon } from './utils/Icons';
+import type { CalendarEvent } from '@/types';
+import { TruncatedTitle } from '@/components/shared/utils/TruncatedTitle';
+import { Pagination } from '@/components/shared/utils/Pagination';
+import { EmptyState } from '@/components/shared/utils/EmptyState';
+import { AddButton } from '@/components/shared/utils/AddButton';
+import { ArrowDownIcon } from '@/components/shared/utils/Icons';
 
-import { useAutoFitPagination } from '../../hooks/useAutoFitPagination';
+import { useAutoFitPagination } from '@/hooks/useAutoFitPagination';
 
 interface EventsColumnProps {
   events: CalendarEvent[];

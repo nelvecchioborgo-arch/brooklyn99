@@ -1,7 +1,7 @@
 // src/hooks/useAgendaHome.ts
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from './useApi';
-import type { Event, Task } from '../types';
+import type { Event, Task } from '@/types';
 
 export const useAgendaHome = (calendarViewDate: Date = new Date()) => {
   const api = useApi();
@@ -35,4 +35,5 @@ export const useAgendaHome = (calendarViewDate: Date = new Date()) => {
     tasks: tasks || [],
     isLoading: eventsLoading || tasksLoading
   };
+
 };

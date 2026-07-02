@@ -1,36 +1,42 @@
 // src/views/HomePage.tsx
 import React, { useState, useMemo } from 'react';
-import { useAgendaHome } from '../hooks/useAgendaHome';
-import { useAgendaMutations } from '../hooks/useAgendaMutations';
+import { useAgendaHome } from '@/hooks/useAgendaHome';
+import { useAgendaMutations } from '@/hooks/useAgendaMutations';
 import { useNavigate } from 'react-router-dom';
-import { useCategories } from '../hooks/useCategories';
+import { useCategories } from '@/hooks/useCategories';
 
-import CalendarColumn, { type CalendarEvent } from '../components/dashboard/CalendarColumn';
-import TodoColumn, { type TaskTodo } from '../components/shared/TodoColumn';
-import EventsColumn from '../components/shared/EventsColumn';
+import CalendarColumn from '@/components/dashboard/CalendarColumn';
+import TaskColumn from '@/components/shared/TaskColumn';
+import { type TaskSummary } from '@/types';
+import EventsColumn from '@/components/shared/EventsColumn';
 
-import NewTaskModal from '../components/shared/TodoNewModal';
-import TaskDetailModal from '../components/shared/TodoDetailModal';
-import NewEventModal from '../components/shared/EventNewModal';
-import EventDetailModal from '../components/shared/EventDetailModal';
+import TaskNewModal from '@/components/shared/TaskNewModal';
+import TaskDetailModal from '@/components/shared/TaskDetailModal';
+import NewEventModal from '@/components/shared/EventNewModal';
+import EventDetailModal from '@/components/shared/EventDetailModal';
 
 // Le nostre super-utility
-import { calculateYearProgress } from '../utils/dateUtils';
-import { mapTasksToTodos } from '../utils/taskUtils';
-import { useModal } from '../hooks/useModals';
+import { calculateYearProgress } from '@/utils/dateUtils';
+import { mapTasksToTasks } from '@/utils/taskUtils';
+import { useModal } from '@/hooks/useModals';
+import { useTaskModals } from '@/context/TaskModalContext';
 
-import { getUpcomingTasks } from '../utils/taskUtils';
-import { Badge } from '../components/shared/utils/Badges';
-import { EmptyState } from '../components/shared/utils/EmptyState';
+import { getUpcomingTasks } from '@/utils/taskUtils';
+import { Badge } from '@/components/shared/utils/Badges';
+import { EmptyState } from '@/components/shared/utils/EmptyState';
+import type { Event as AgendaEvent, CalendarEvent } from '@/types';
+
+interface TaskFormModalState {
+  taskToEdit?: TaskSummary | null;
+  initialParentId?: number | null;
+}
 
 const HomePage: React.FC = () => {
   // 1. Modali di Dettaglio (il dato è l'elemento selezionato)
-const taskDetailModal = useModal<TaskTodo>();
+const { openTaskDetail, openTaskForm } = useTaskModals();
 const eventDetailModal = useModal<CalendarEvent>();
 
 // 2. Modali di Form/Creazione
-// Per la task, il dato sarà la Task da modificare (o null se è nuova)
-const taskFormModal = useModal<TaskTodo>(); 
 
 // Per l'evento, ci serve sia l'evento da editare che l'eventuale data iniziale cliccata
 const eventFormModal = useModal<{ 
@@ -47,8 +53,6 @@ const eventFormModal = useModal<{
 
   const yearProgress = useMemo(() => calculateYearProgress(), []);
 
-  
-
   const handleGoToDay = (dateStr: string) => {
   // Passiamo la data direttamente tramite la memoria del Router!
   navigate('/giorno', { state: { selectedDate: dateStr } }); 
@@ -56,30 +60,30 @@ const eventFormModal = useModal<{
 
   // --- DATI REALI DALLE UTILITY ---
   const oggiStr = new Date().toISOString().substring(0, 10);
-  const mappedTodos = useMemo(() => mapTasksToTodos(tasks || [], oggiStr), [tasks, oggiStr]);
+  const mappedTasks = useMemo(() => mapTasksToTasks(tasks || [], oggiStr), [tasks, oggiStr]);
   
   const calendarEvents = useMemo(() => {
-    return (eventiDalServer || []).map((e: any) => ({
+    return (eventiDalServer || []).map((e: AgendaEvent) => ({
       id: `${e.id}-${e.data_inizio.substring(0, 10)}`, // ID univoco per il frontend
       originalId: e.id,
       title: e.titolo,
       dateStr: e.data_inizio.substring(0, 10),
-      endDateStr: e.data_fine ? e.data_fine.substring(0, 10) : '',
+      endDateStr: e.data_fine ? e.data_fine.substring(0, 10) : undefined,
       time: e.tutto_il_giorno ? undefined : e.data_inizio.substring(11, 16),
       endTime: e.tutto_il_giorno || !e.data_fine ? undefined : e.data_fine.substring(11, 16),
       category: e.category?.name || e.category_name || 'Generico',
       categoryColor: e.category?.colore || '#9ca3af',
       tutto_il_giorno: e.tutto_il_giorno,
-      rrule: e.rrule
+      rrule: e.rrule || undefined,
     }));
   }, [eventiDalServer]);
 
   // --- TASK DEI PROSSIMI 30 GIORNI (VERI) ---
-  const next30DaysTasks = useMemo(() => getUpcomingTasks(mappedTodos, 30), [mappedTodos]);
+  const next30DaysTasks = useMemo(() => getUpcomingTasks(mappedTasks, 30), [mappedTasks]);
 
-  const toggleTodo = async (id: number, e?: React.MouseEvent) => {
+  const toggleTask = async (id: number, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    const taskCorrente = mappedTodos.find(t => t.id === id);
+    const taskCorrente = mappedTasks.find(t => t.id === id);
     if (!taskCorrente) return;
     await updateTask({ id, data: { fatto: !taskCorrente.done } });
   };
@@ -106,12 +110,12 @@ const eventFormModal = useModal<{
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 flex-1 xl:min-h-0">
         
         <div className="xl:col-span-3 flex flex-col h-full min-h-0">
-          <TodoColumn 
-            todos={mappedTodos} 
-            onToggleTodo={toggleTodo} 
-            onSelectTask={task => taskDetailModal.open(task)} 
-            onAddTaskClick={() => taskFormModal.open(null)} 
-          />
+          <TaskColumn 
+              tasks={mappedTasks} 
+              onToggleTask={toggleTask} 
+              onSelectTask={openTaskDetail} 
+              onAddTaskClick={() => openTaskForm()} 
+            />
         </div>
 
         <div className="xl:col-span-6 flex flex-col h-full min-h-0">
@@ -157,7 +161,7 @@ const eventFormModal = useModal<{
                 </tr>
               ) : (
                 next30DaysTasks.map(task => (
-                  <tr key={task.id} className="hover:bg-gray-50 border-b border-gray-50 transition-colors cursor-pointer" onClick={() => taskDetailModal.open(task)}>
+                  <tr key={task.id} className="hover:bg-gray-50 border-b border-gray-50 transition-colors cursor-pointer" >
                     <td className="py-3 text-sm font-medium text-gray-800">{task.title}</td>
                     <td className="py-3"><Badge variant="category" colorHex={task.categoryColor}>{task.category}</Badge></td>
                     <td className="py-3 text-sm font-bold text-gray-600">{task.deadline}</td>
@@ -169,27 +173,6 @@ const eventFormModal = useModal<{
           </table>
         </div>
       </div>
-
-      {/* --- MODALI TASK --- */}
-        <TaskDetailModal 
-          isOpen={taskDetailModal.isOpen} 
-          onClose={taskDetailModal.close} 
-          selectedTask={taskDetailModal.data} 
-          onToggleTodo={(id) => toggleTodo(id)} 
-          todos={mappedTodos} 
-          onSelectTask={taskDetailModal.open} // Permette la navigazione tra subtasks
-          onEditClick={() => { 
-            // Chiudiamo il dettaglio e apriamo il form passando la task corrente
-            taskFormModal.open(taskDetailModal.data!); 
-            taskDetailModal.close(); 
-          }} 
-        />
-
-        <NewTaskModal 
-          isOpen={taskFormModal.isOpen} 
-          onClose={taskFormModal.close} 
-          taskToEdit={taskFormModal.data} 
-        />
 
         {/* --- MODALI EVENTI --- */}
         <EventDetailModal 
@@ -214,5 +197,6 @@ const eventFormModal = useModal<{
     </div>
   );
 };
+
 
 export default HomePage;

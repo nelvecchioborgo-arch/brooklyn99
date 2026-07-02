@@ -2,7 +2,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from './useApi';
-import type { RoutinePeriod } from '../components/day/RoutineColumn';
+import type { RoutinePeriod } from '@/components/day/RoutineColumn';
 
 // 1. LE TUE OTTIME INTERFACCE
 interface HabitLogItem {
@@ -63,4 +63,5 @@ export const useHabitLogs = (habitId?: number, periods?: RoutinePeriod[]) => {
   }, [fullLogs, periods]);
 
   return { groupedLogs, isLoading };
+
 };

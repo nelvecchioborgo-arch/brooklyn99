@@ -1,8 +1,8 @@
 // src/hooks/useHabitLogs.ts
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useApi } from './useApi';
-import type { RoutinePeriod } from '../components/day/RoutineColumn';
+import { useApi } from '@/useApi';
+import type { RoutinePeriod } from '@/components/day/RoutineColumn';
 
 // 1. REINSERITE LE INTERFACCE DAL VECCHIO CODICE
 interface HabitLogItem {
@@ -56,4 +56,5 @@ export const useHabitLogs = (habitId?: number, periods?: RoutinePeriod[]) => {
   }, [fullLogs, periods]);
 
   return { groupedLogs, isLoading };
+
 };

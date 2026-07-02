@@ -1,13 +1,13 @@
 // src/utils/taskUtils.ts
-import type { Task } from '../types';
-import type { TaskTodo } from '../components/shared/TodoColumn';
+import type { Task } from '@/types';
+import type { TaskSummary } from '@/types';
 import { formatToItalianShortDate } from './dateUtils'; 
 
 // ------------------------------------------------------------------
 // 1. FUNZIONI DI ORDINAMENTO E MAPPING BASE
 // ------------------------------------------------------------------
 
-export const sortTasks = (tasks: TaskTodo[], sortMode: 'chrono' | 'priority'): TaskTodo[] => {
+export const sortTasks = (tasks: TaskSummary[], sortMode: 'chrono' | 'priority'): TaskSummary[] => {
   const priorityWeights = { Alta: 3, Media: 2, Bassa: 1 };
 
   return [...tasks].sort((a, b) => {
@@ -24,11 +24,11 @@ export const sortTasks = (tasks: TaskTodo[], sortMode: 'chrono' | 'priority'): T
   });
 };
 
-export const mapTaskToTodo = (
+export const mapTaskToTask = (
   t: Task, 
   hasActiveSubtasks: boolean, 
-  extraProps: Partial<TaskTodo> = {}
-): TaskTodo => {
+  extraProps: Partial<TaskSummary> = {}
+): TaskSummary => {
   const dateVal = t.data_scadenza ? t.data_scadenza.substring(0, 10) : '';
   return {
     id: t.id,
@@ -48,11 +48,11 @@ export const mapTaskToTodo = (
 };
 
 // 🪄 IL CAPOLAVORO: Schwartzian Transform dal tuo Secondo Snippet
-export const getUpcomingTasks = (todos: TaskTodo[], days: number = 30, limit: number = 6): TaskTodo[] => {
+export const getUpcomingTasks = (tasks: TaskSummary[], days: number = 30, limit: number = 6): TaskSummary[] => {
   const now = Date.now();
   const timeLimit = days * 24 * 60 * 60 * 1000;
   
-  return todos
+  return tasks
     .filter(t => !t.done && t.deadline !== 'Nessuna' && t.dateStr)
     .map(t => ({
       task: t,
@@ -109,9 +109,9 @@ export const getAllActiveSubtasksOptimized = (
 // 3. MOTORI DI MAPPING PRINCIPALI (Primo Snippet pulito)
 // ------------------------------------------------------------------
 
-export const mapTasksToTodos = (allTasks: Task[], oggiStr: string): TaskTodo[] => {
+export const mapTasksToTasks = (allTasks: Task[], oggiStr: string): TaskSummary[] => {
   if (!allTasks || !Array.isArray(allTasks)) return [];
-  const taskDaMostrare: TaskTodo[] = [];
+  const taskDaMostrare: TaskSummary[] = [];
 
   const tasksByParent = new Map<number | null, Task[]>();
   allTasks.forEach(t => {
@@ -156,15 +156,15 @@ export const mapTasksToTodos = (allTasks: Task[], oggiStr: string): TaskTodo[] =
 
     if (sottotaskPromossePerData.length > 0) {
       sottotaskPromossePerData.forEach(sub => {
-        taskDaMostrare.push(mapTaskToTodo(sub, false, { isPromotedSubtask: true }));
+        taskDaMostrare.push(mapTaskToTask(sub, false, { isPromotedSubtask: true }));
       });
     } else {
-      taskDaMostrare.push(mapTaskToTodo(t, hasActiveSubtasks));
+      taskDaMostrare.push(mapTaskToTask(t, hasActiveSubtasks));
     }
 
     if (sottotaskUrgentiSenzaData.length > 0) {
       sottotaskUrgentiSenzaData.forEach(sub => {
-        taskDaMostrare.push(mapTaskToTodo(sub, false, { isPromotedSubtask: true, isUrgentFromSubtask: true }));
+        taskDaMostrare.push(mapTaskToTask(sub, false, { isPromotedSubtask: true, isUrgentFromSubtask: true }));
       });
     }
   });
@@ -172,8 +172,8 @@ export const mapTasksToTodos = (allTasks: Task[], oggiStr: string): TaskTodo[] =
   return taskDaMostrare; 
 };
 
-export const mapDayTasksToTodos = (allTasks: Task[], targetDateStr: string): TaskTodo[] => {
-  const tasksToShow: TaskTodo[] = [];
+export const mapDayTasksToTasks = (allTasks: Task[], targetDateStr: string): TaskSummary[] => {
+  const tasksToShow: TaskSummary[] = [];
 
   const taskById = new Map<number, Task>();
   const tasksByParent = new Map<number | null, Task[]>();
@@ -208,9 +208,31 @@ export const mapDayTasksToTodos = (allTasks: Task[], targetDateStr: string): Tas
       const children = tasksByParent.get(t.id) || [];
       const hasActiveSubtasks = children.some(sub => !sub.fatto);
       
-      tasksToShow.push(mapTaskToTodo(t, hasActiveSubtasks));
+      tasksToShow.push(mapTaskToTask(t, hasActiveSubtasks));
     }
   });
 
   return tasksToShow;
+};
+
+export const getDeepEarliestDeadline = (
+  taskId: number,
+  taskById: Map<number, Task>,
+  tasksByParent: Map<number | null, Task[]>
+): number => {
+  const task = taskById.get(taskId);
+  // Se non c'è scadenza, impostiamo a Infinito (verrà messa alla fine dell'ordinamento)
+  let earliest = task?.data_scadenza ? new Date(task.data_scadenza.substring(0, 10)).getTime() : Infinity;
+
+  const children = tasksByParent.get(taskId) || [];
+  
+  // Ricorsione sui figli per trovare scadenze più brevi
+  for (const child of children) {
+    const childEarliest = getDeepEarliestDeadline(child.id, taskById, tasksByParent);
+    if (childEarliest < earliest) {
+      earliest = childEarliest;
+    }
+  }
+
+  return earliest;
 };
