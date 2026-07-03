@@ -3,31 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApi } from './useApi';
 
 // 🪄 1. Importiamo TUTTI i tipi che compongono una giornata
-import type { Task, Habit, HabitLog, Event, Countdown, DailyEntry, DaySyncResponse } from '@/types';
+import type { Task, Habit, HabitLog, DaySyncResponse, SaveHabitPayload } from '@/types';
 
 // 🪄 3. Creiamo l'interfaccia esatta per i dati che inviamo quando creiamo un'abitudine
-interface HabitFormData {
-  titolo: string;
-  tipo: 'R' | 'H'; // R = Routine, H = Habit
-  rrule?: string | null;
-  immagine_url?: string | null;
-  periodId?: number;
-  periods?: Array<{
-    data_inizio: string;
-    data_fine?: string | null;
-    target: number;
-  }>;
-}
 
-interface SaveHabitPayload {
-  existingId?: number;
-  data: HabitFormData; 
-}
-
-interface SaveCountdownPayload {
+export interface SaveCountdownPayload {
   id?: number;
-  title?: string;
-  targetDateStr?: string;
+  title: string;
+  targetDateStr: string;
   imageUrl?: string | null;
 }
 
@@ -129,7 +112,7 @@ export const useAgendaDay = (dateStr: string) => {
       const isUpdate = countdown.id && countdown.id < 1000000000;
       const payload = {
         title: countdown.title || "Nuovo Countdown",
-        target_date: (countdown.targetDateStr || new Date().toISOString()).substring(0, 10),
+        target_date: (countdown.targetDateStr || new Date().toISOString()),
         immagine_url: countdown.imageUrl || null
       };
       return isUpdate 

@@ -1,7 +1,5 @@
 // src/types/index.ts
 
-// src/types/index.ts
-
 // --- CATEGORIE ---
 export interface Category {
   id: number;
@@ -105,6 +103,27 @@ export interface Habit {
   // Rigorosi: sono sempre array!
   periods: HabitPeriod[];
   logs: HabitLog[];
+}
+
+export interface HabitFormData {
+  titolo: string;
+  tipo: 'R' | 'H'; // R = Routine, H = Habit
+  rrule?: string | null;
+  immagine_url?: string | null;
+  data_inizio?: string;
+  data_fine?: string | null;
+  target_completamenti?: number;
+  periodId?: number;
+  periods?: Array<{
+    data_inizio: string;
+    data_fine?: string | null;
+    target: number;
+  }>;
+}
+
+export interface SaveHabitPayload {
+  existingId?: number;
+  data: HabitFormData; 
 }
 
 export interface NoteItem {

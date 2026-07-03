@@ -27,6 +27,14 @@ function toNumberOrNull(value?: string | null) {
   return value != null && value !== '' ? Number(value) : null;
 }
 
+function toDecimalOrUndefined(value?: string | null) {
+  return value != null && value !== '' ? Number(value) : undefined;
+}
+
+function toDecimalOrNull(value?: string | null) {
+  return value != null && value !== '' ? Number(value) : null;
+}
+
 // Helper: converte form state → payload API (string → number dove necessario)
 function listFormToPayload(form: Partial<ListFormState>) {
   return {
@@ -42,7 +50,7 @@ function itemFormToPayload(form: Partial<ItemFormState>) {
   return {
     shopping_list_id: toNumberOrUndefined(form.shopping_list_id),
     name_original: form.name_original,
-    quantity: toNumberOrNull(form.quantity),
+    quantity: toDecimalOrNull(form.quantity),
     unit_id: toNumberOrNull(form.unit_id),
     notes: form.notes || null,
     status_id: toNumberOrUndefined(form.status_id),
@@ -60,11 +68,9 @@ function purchaseFormToPayload(form: Partial<PurchaseFormState>) {
   return {
     supplier_id: toNumberOrNull(form.supplier_id),
     purchase_date: form.purchase_date || undefined,
-    price: toNumberOrUndefined(form.price),
+    price: toDecimalOrUndefined(form.price),
     currency_id: toNumberOrNull(form.currency_id),
     offer_flag_id: toNumberOrNull(form.offer_flag_id),
-    product_name_original: form.product_name_original || null,
-    product_name_normalized: form.product_name_normalized || null,
   };
 }
 
@@ -111,15 +117,16 @@ export const useShoppingApi = () => {
   // Groups
   const fetchGroups = () => api.get<ShoppingGroup[]>('/shopping/groups');
 
-  const createGroup = (name: string, description?: string) =>
+  const createGroup = (name: string, description?: string, status_id?: number) =>
     api.post<ShoppingGroup>('/shopping/groups', {
       name,
       description: description || null,
+      status_id,
     });
 
   const updateGroup = (
     groupId: number,
-    data: Partial<{ name: string; description: string | null; status_id: number }>
+    data: Partial<{ name: string; description: string | null; status_id: number | null }>
   ) => api.patch<ShoppingGroup>(`/shopping/groups/${groupId}`, data);
 
   const deleteGroup = (groupId: number) =>
@@ -185,8 +192,21 @@ export const useShoppingApi = () => {
   const createItem = (form: ItemFormState) =>
     api.post<ShoppingListItem>('/shopping/items', itemFormToPayload(form));
 
-  const updateItem = (itemId: number, form: Partial<ItemFormState>) =>
-    api.patch<ShoppingListItem>(`/shopping/items/${itemId}`, itemFormToPayload(form));
+  const updateItem = (itemId: number, form: Partial<ItemFormState> & {
+    is_purchased?: boolean;
+    purchased_at?: string | null;
+    purchased_by_user_id?: number | null;
+    updated_by_user_id?: number | null;
+    deleted_at?: string | null;
+  }) =>
+    api.patch<ShoppingListItem>(`/shopping/items/${itemId}`, {
+      ...itemFormToPayload(form),
+      is_purchased: form.is_purchased,
+      purchased_at: form.purchased_at,
+      purchased_by_user_id: form.purchased_by_user_id,
+      updated_by_user_id: form.updated_by_user_id,
+      deleted_at: form.deleted_at,
+    });
 
   const deleteItem = (itemId: number) =>
     api.del(`/shopping/items/${itemId}`);
