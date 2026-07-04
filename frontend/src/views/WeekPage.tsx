@@ -2,13 +2,14 @@
 import React, { useState, useMemo } from 'react';
 import { getMonday, getSunday, getISOWeekNumber, formatDateString } from '@/utils/dateUtils';
 import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 
 // --- IMPORT COMPONENTI ---
-import { BackIcon, ForwardIcon, UndoIcon, PlusIcon } from '@/components/shared/utils/Icons';
+import { BackIcon, ForwardIcon, UndoIcon, PlusIcon, CalendarIcon } from '@/components/shared/utils/Icons';
 import { SmartObiettivoTextarea } from '@/components/day/utils/SmartObiettivoTextarea';
 import CalendarColumn from '@/components/dashboard/CalendarColumn';
-import TaskColumn from '@/components/shared/TaskColumn';
 import NotesSidebar from '@/components/day/NotesSidebar';
+import DatePicker from '@/components/shared/utils/DatePicker';
 
 // --- IMPORT MODALI ---
 import EventDetailModal from '@/components/shared/EventDetailModal';
@@ -18,10 +19,12 @@ import TaskNewModal from '@/components/shared/TaskNewModal';
 
 import type { Task, CalendarEvent, DailyEntry, TaskSummary, SyncWeekResponse } from '@/types';
 import { useAgendaWeek } from '@/hooks/useAgendaWeek'; 
+import { useAgendaMutations } from '@/hooks/useAgendaMutations';
 
 const WeekPage: React.FC = () => {
-  // 1. STATO DELLA DATA
+  // 1. STATO DELLA DATA E DEL DATEPICKER
   const [targetDate, setTargetDate] = useState<Date>(new Date());
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
   
   const monday = getMonday(targetDate);
   const sunday = getSunday(targetDate);
@@ -32,31 +35,54 @@ const WeekPage: React.FC = () => {
   const sundayStr = formatDateString(sunday);
 
   const queryClient = useQueryClient();
- // 2. STATI DEI PANNELLI E DEI MODALI (Tipizzati Rigorosamente)
+  // 2. STATI DEI PANNELLI E DEI MODALI
   const [isNotesOpen, setIsNotesOpen] = useState<boolean>(false);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   
-  // Stati per la selezione di Eventi e Task
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [selectedTask, setSelectedTask] = useState<TaskSummary | null>(null);
   
-  // Stati per la creazione di nuovi elementi
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState<boolean>(false);
   const [newEventDateStr, setNewEventDateStr] = useState<string | undefined>(undefined);
 
+  const navigate = useNavigate();
+
   // 3. IL "CERVELLO" REACT QUERY
-  const { weekData, isLoading, saveWeeklyEntry, toggleTask } = useAgendaWeek(mondayStr, sundayStr);
+  const { weekData, isLoading, saveWeeklyEntry } = useAgendaWeek(mondayStr, sundayStr);
+  const { updateTask } = useAgendaMutations();
 
   // --- HANDLERS NAVIGAZIONE ---
   const handlePrevWeek = () => setTargetDate(new Date(targetDate.setDate(targetDate.getDate() - 7)));
   const handleNextWeek = () => setTargetDate(new Date(targetDate.setDate(targetDate.getDate() + 7)));
   const handleResetCurrentWeek = () => setTargetDate(new Date());
 
-  const handleToggleTask = (id: number, e: React.MouseEvent) => {
-    e.stopPropagation(); 
-    const taskOrigin = weekData?.tasks.find((t: Task) => t.id === id);
-    if (taskOrigin) {
-      toggleTask({ id, isDone: taskOrigin.fatto });
+  const handleGoToDay = (dateStr: string) => {
+    navigate('/giorno', { state: { selectedDate: dateStr } }); 
+  };
+
+  const handleDatePickerChange = (newDateStr: string) => {
+    const [yyyy, mm, dd] = newDateStr.split('-');
+    setTargetDate(new Date(Number(yyyy), Number(mm) - 1, Number(dd)));
+  };
+
+  // --- HANDLERS TASKS DALLA GRIGLIA ---
+  const handleToggleTaskFromGrid = async (task: Task, newStatus: boolean) => {
+    queryClient.setQueryData<SyncWeekResponse>(['weekSync', mondayStr], (oldData) => {
+      if (!oldData) return oldData;
+      return {
+        ...oldData,
+        tasks: (oldData.tasks || []).map((t: Task) => 
+          t.id === task.id ? { ...t, fatto: newStatus } : t
+        )
+      };
+    });
+    await updateTask({ id: task.id, data: { fatto: newStatus } });
+  };
+
+  const handleSelectTaskFromGrid = (task: Task) => {
+    const summary = mappedTasks.find(t => t.id === task.id);
+    if (summary) {
+      setSelectedTask(summary);
     }
   };
 
@@ -65,37 +91,47 @@ const WeekPage: React.FC = () => {
   const negEvents = (weekData?.eventi_negativi || []) as Array<DailyEntry & { isNew?: boolean }>;
 
   const handleAddWeeklyEvent = (tipo: 'EP' | 'EN') => {
-    const newId = Date.now(); // ID Temporaneo per React
-    queryClient.setQueryData(['weekSync', mondayStr], (oldData: SyncWeekResponse | undefined) => {
+    const newId = Date.now();
+    queryClient.setQueryData<SyncWeekResponse>(['weekSync', mondayStr], (oldData) => {
       if (!oldData) return oldData;
-      const field = tipo === 'EP' ? 'eventi_positivi' : 'eventi_negativi';
-      return {
-        ...oldData,
-        [field]: [...(oldData[field] || []), { id: newId, testo: "", data_riferimento: mondayStr, tipo, isNew: true }]
-      };
+      // CORREZIONE: Aggiunto user_id: 0 per soddisfare in modo sicuro l'interfaccia TypeScript
+      if (tipo === 'EP') {
+        return {
+          ...oldData,
+          eventi_positivi: [...(oldData.eventi_positivi || []), { id: newId, user_id: 0, testo: "", data_riferimento: mondayStr, tipo, isNew: true }]
+        };
+      } else {
+        return {
+          ...oldData,
+          eventi_negativi: [...(oldData.eventi_negativi || []), { id: newId, user_id: 0, testo: "", data_riferimento: mondayStr, tipo, isNew: true }]
+        };
+      }
     });
   };
 
   const handleBlurWeeklyEvent = (e: React.FocusEvent<HTMLTextAreaElement>, ev: DailyEntry & { isNew?: boolean }, tipo: 'EP' | 'EN') => {
     const text = e.target.value;
     
-    // Se è nuovo ed è stato lasciato vuoto, lo eliminiamo localmente senza chiamare il backend
     if (!text.trim() && ev.isNew) {
-      queryClient.setQueryData(['weekSync', mondayStr], (oldData: SyncWeekResponse | undefined) => {
+      queryClient.setQueryData<SyncWeekResponse>(['weekSync', mondayStr], (oldData) => {
         if (!oldData) return oldData;
-        const field = tipo === 'EP' ? 'eventi_positivi' : 'eventi_negativi';
-        return {
-          ...oldData,
-          [field]: (oldData[field] || []).filter((x: DailyEntry) => x.id !== ev.id)
-        };
+        if (tipo === 'EP') {
+          return {
+            ...oldData,
+            eventi_positivi: (oldData.eventi_positivi || []).filter((x) => x.id !== ev.id)
+          };
+        } else {
+          return {
+            ...oldData,
+            eventi_negativi: (oldData.eventi_negativi || []).filter((x) => x.id !== ev.id)
+          };
+        }
       });
       return;
     }
 
-    // Altrimenti salviamo o aggiorniamo 
     saveWeeklyEntry({ id: ev.isNew ? undefined : ev.id, text, tipo, dateStr: mondayStr });
   };
-
 
   // --- ADAPTERS ---
   const filteredTasks = useMemo(() => {
@@ -155,28 +191,28 @@ const WeekPage: React.FC = () => {
   const handleAddNote = () => {
     const newId = Date.now();
     setEditingNoteId(newId);
-    queryClient.setQueryData(['weekSync', mondayStr], (oldData: SyncWeekResponse | undefined) => {
+    queryClient.setQueryData<SyncWeekResponse>(['weekSync', mondayStr], (oldData) => {
       if (!oldData) return oldData;
-      return { ...oldData, note: [{ id: newId, testo: "", data_riferimento: mondayStr, tipo: 'N1', isNew: true }, ...(oldData.note || [])] };
+      // CORREZIONE: Aggiunto user_id: 0
+      return { ...oldData, note: [{ id: newId, user_id: 0, testo: "", data_riferimento: mondayStr, tipo: 'N1', isNew: true }, ...(oldData.note || [])] };
     });
   };
 
   const handleAutoSaveNote = (id: number, text: string, isNew?: boolean) => {
-    queryClient.setQueryData(['weekSync', mondayStr], (oldData: SyncWeekResponse | undefined) => {
+    queryClient.setQueryData<SyncWeekResponse>(['weekSync', mondayStr], (oldData) => {
       if (!oldData) return oldData;
-      return { ...oldData, note: (oldData.note || []).map((n: DailyEntry & { isNew?: boolean }) => n.id === id ? { ...n, testo: text, isNew: false } : n) };
+      return { ...oldData, note: (oldData.note || []).map((n) => n.id === id ? { ...n, testo: text, isNew: false } : n) };
     });
     saveWeeklyEntry({ id: isNew ? undefined : id, text: text, tipo: 'N1', dateStr: mondayStr });
   };
 
   const handleDeleteNote = (id: number, isNew?: boolean) => {
-    queryClient.setQueryData(['weekSync', mondayStr], (oldData: SyncWeekResponse | undefined) => {
+    queryClient.setQueryData<SyncWeekResponse>(['weekSync', mondayStr], (oldData) => {
       if (!oldData) return oldData;
-      return { ...oldData, note: (oldData.note || []).filter((n: DailyEntry & { isNew?: boolean }) => n.id !== id) };
+      return { ...oldData, note: (oldData.note || []).filter((n) => n.id !== id) };
     });
     if (!isNew) saveWeeklyEntry({ id, text: "", tipo: 'N1', dateStr: mondayStr }); 
   };
-
 
   if (isLoading && !weekData) return <div className="flex h-full items-center justify-center font-bold text-gray-500 animate-pulse">Caricamento settimana...</div>;
 
@@ -185,24 +221,43 @@ const WeekPage: React.FC = () => {
       
       {/* 1. SEZIONE TOP */}
       <div className="flex flex-col xl:flex-row gap-6 shrink-0 items-stretch">
+        
+        {/* CORREZIONE: Layout di allineamento centrale rigoroso usando flex gap, che sostituisce il "justify-between" sbilanciato */}
         <div className="xl:w-1/4 flex flex-col justify-center items-center relative py-2 z-30">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-1">Settimanale</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-1 text-center">Settimanale</h2>
           
-          <div className="flex items-center justify-between w-[265px] xl:w-[305px] relative mx-auto z-40">
+          <div className="flex items-center justify-center gap-3 xl:gap-5 w-full relative z-40">
             <button onClick={handlePrevWeek} className="relative z-50 text-blue-600 hover:text-blue-800 transition-transform hover:-translate-x-1 focus:outline-none p-2 shrink-0 bg-transparent">
               <BackIcon className="w-8 h-8" />
             </button>
-            <div className="flex-1 flex justify-center relative">
-              <div className="text-center">
-                <h1 className="text-3xl xl:text-4xl font-extrabold text-gray-900 uppercase">SET. {weekNumber}</h1>
-              </div>
+            
+            <div className="flex justify-center relative">
+              <DatePicker
+                value={formatDateString(targetDate)} 
+                onChange={handleDatePickerChange}
+                isOpen={isDatePickerOpen}
+                onClose={() => setIsDatePickerOpen(false)}
+                onToggle={() => setIsDatePickerOpen((prev) => !prev)}
+                align="center" 
+                customTrigger={
+                  <div className="text-center group flex flex-col items-center justify-center py-1 px-3 rounded-lg hover:bg-gray-100/80 transition-colors">
+                    <h1 className="text-3xl xl:text-4xl font-extrabold text-gray-900 uppercase flex items-center gap-2">
+                      SET. {weekNumber}
+                    </h1>
+                    <span className="flex items-center gap-1 text-[10px] text-gray-400 font-bold tracking-widest mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <CalendarIcon className="w-3 h-3" /> CAMBIA DATA
+                    </span>
+                  </div>
+                }
+              />
             </div>
+
             <button onClick={handleNextWeek} className="relative z-50 text-blue-600 hover:text-blue-800 transition-transform hover:translate-x-1 focus:outline-none p-2 shrink-0 bg-transparent">
               <ForwardIcon className="w-8 h-8" />
             </button>
           </div>
           
-          <p className="text-lg xl:text-xl font-medium text-gray-500 mt-1">
+          <p className="text-lg xl:text-xl font-medium text-gray-500 mt-1 text-center">
             {monday.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit'})} - {sunday.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit'})}
           </p>
 
@@ -224,7 +279,7 @@ const WeekPage: React.FC = () => {
                 <SmartObiettivoTextarea 
                   key={`ob-week-${obiettivoObj?.id || 'empty'}-${mondayStr}`}
                   initialText={obiettivoObj?.testo || ""}
-                  onSave={(testo) => saveWeeklyEntry({ id: obiettivoObj?.id, text: testo, tipo: 'OS', dateStr: mondayStr })}
+                  onSave={(testo) => saveWeeklyEntry({ id: obiettivoObj?.id, text: testo, tipo: 'OW', dateStr: mondayStr })}
                 />
               );
             })()}
@@ -241,7 +296,7 @@ const WeekPage: React.FC = () => {
                       key={`pri-week-${index}-${prioritaObj?.id || 'empty'}-${mondayStr}`} 
                       type="text" 
                       defaultValue={prioritaObj?.testo || ""} 
-                      onBlur={(e) => saveWeeklyEntry({ id: prioritaObj?.id, text: e.target.value, tipo: 'PS', dateStr: mondayStr })} 
+                      onBlur={(e) => saveWeeklyEntry({ id: prioritaObj?.id, text: e.target.value, tipo: 'PW', dateStr: mondayStr })} 
                       placeholder={`Priorità ${index + 1}`} 
                       className="w-full text-sm font-medium text-gray-700 border-none bg-transparent focus:ring-0 p-0 placeholder-gray-300" 
                     />
@@ -264,39 +319,25 @@ const WeekPage: React.FC = () => {
              targetDate={targetDate} 
              variant="detailed"    
              onSelectEvent={(event: CalendarEvent) => setSelectedEvent(event)}
-             onDayClick={(dateStr: string) => setNewEventDateStr(dateStr)}
+             onDayClick={handleGoToDay}
+             onSelectTask={handleSelectTaskFromGrid}
+             onToggleTask={handleToggleTaskFromGrid}
            />
         </div>
-        
-        {/* <div className="xl:col-span-4 flex flex-col gap-3 h-full min-h-0 min-w-0">
-              <TaskColumn 
-                tasks={mappedTasks} 
-                onToggleTask={handleToggleTask} 
-                onSelectTask={(task) => console.log("Task selezionato", task)}
-                onAddTaskClick={() => console.log("Aggiungi task cliccato")}
-              />
-        </div> */}
       </div>
 
-
-      {/* 3. EVENTI POSITIVI / NEGATIVI - DUE BOLLE (Ognuna divisa in 3 colonne interne) */}
+      {/* 3. EVENTI POSITIVI / NEGATIVI - DUE BOLLE */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 shrink-0 h-44 pb-2">
 
         {/* --- EVENTI POSITIVI --- */}
-        {/* Unica Bolla divisa in 3 (1 colonna titolo, 2 colonne textarea) */}
         <div className="bg-white rounded-xl shadow-sm border border-green-200 overflow-hidden relative group grid grid-cols-3">
-          
-          {/* Titolo Positivi (1/3) */}
           <div className="col-span-1 bg-white flex flex-col items-center justify-center text-center p-2">
             <span className="text-sm xl:text-lg font-black text-green-600 uppercase tracking-widest leading-relaxed">
               EVENTI<br/>POSITIVI
             </span>
           </div>
           
-          {/* Contenuto Positivi (2/3) */}
           <div className="col-span-2 p-3 overflow-y-auto custom-scrollbar relative flex flex-col bg-white">
-            
-            {/* Tasto Add Flottante */}
             {posEvents.length > 0 && (
               <button
                 onClick={() => handleAddWeeklyEvent('EP')}
@@ -333,22 +374,15 @@ const WeekPage: React.FC = () => {
           </div>
         </div>
 
-
         {/* --- EVENTI NEGATIVI --- */}
-        {/* Unica Bolla divisa in 3 (1 colonna titolo, 2 colonne textarea) */}
         <div className="bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden relative group grid grid-cols-3">
-          
-          {/* Titolo Negativi (1/3) */}
           <div className="col-span-1 bg-white flex flex-col items-center justify-center text-center p-2">
             <span className="text-sm xl:text-lg font-black text-red-600 uppercase tracking-widest leading-relaxed">
               EVENTI<br/>NEGATIVI
             </span>
           </div>
           
-          {/* Contenuto Negativi (2/3) */}
           <div className="col-span-2 p-3 overflow-y-auto custom-scrollbar relative flex flex-col bg-white">
-            
-            {/* Tasto Add Flottante */}
             {negEvents.length > 0 && (
               <button
                 onClick={() => handleAddWeeklyEvent('EN')}
@@ -405,32 +439,20 @@ const WeekPage: React.FC = () => {
         <EventDetailModal
           isOpen={true}
           onClose={() => setSelectedEvent(null)}
-          // CORREZIONE 1: Usiamo i nomi esatti dell'interfaccia
           selectedEvent={selectedEvent} 
-          onEditClick={() => {
-            console.log("Apri modale di modifica per l'evento:", selectedEvent.id);
-            // Qui in futuro chiuderai questo modale e aprirai EventNewModal in modalità "modifica"
-          }}
-          onDeleteClick={(id) => {
-            console.log("Elimina evento con ID:", id);
-            // Qui in futuro chiamerai la mutation per eliminare l'evento
-            setSelectedEvent(null);
-          }}
+          onEditClick={() => { console.log("Modifica"); }}
+          onDeleteClick={(id) => { setSelectedEvent(null); }}
         />
       )}
 
-      {/* Nuovo Evento / Modifica Evento */}
+      {/* Nuovo Evento */}
       {newEventDateStr && (
         <EventNewModal
           isOpen={true}
           onClose={() => setNewEventDateStr(undefined)}
-          // CORREZIONE 2: Usiamo 'initialDate' come da tua interfaccia
           initialDate={newEventDateStr} 
-          eventToEdit={null} // Passiamo null perché stiamo creando un evento nuovo
-          onEventSaved={() => {
-            console.log("Evento salvato! Ricarico i dati...");
-            setNewEventDateStr(undefined);
-          }}
+          eventToEdit={null}
+          onEventSaved={() => { setNewEventDateStr(undefined); }}
         />
       )}
 
@@ -439,40 +461,17 @@ const WeekPage: React.FC = () => {
         <TaskDetailModal
           isOpen={true}
           onClose={() => setSelectedTask(null)}
-          
-          // 1. Passiamo la task selezionata
           selectedTask={selectedTask} 
-          
-          // 2. Passiamo l'array completo delle task (risolve l'errore "Did you mean 'tasks'?")
           tasks={mappedTasks} 
-          
-          // 3. Funzione per spuntare la task (senza passare l'evento del mouse, che qui non serve)
           onToggleTask={(id: number) => {
-            // Cerchiamo la task originale nei dati scaricati per sapere se era già spuntata
             const taskOrigin = weekData?.tasks.find((t: Task) => t.id === id);
             if (taskOrigin) {
-              toggleTask({ id, isDone: taskOrigin.fatto });
+              handleToggleTaskFromGrid(taskOrigin, !taskOrigin.fatto);
             }
           }}
-          
-          // 4. Funzione per selezionare una nuova task (utilissimo se dentro 
-          //    il dettaglio c'è una lista di sotto-task e l'utente ci clicca sopra)
           onSelectTask={(task: TaskSummary) => setSelectedTask(task)}
-          
-          // 5. Funzione obbligatoria per il tasto "Modifica"
-          onEditClick={() => {
-            console.log("Cliccato Modifica per la task:", selectedTask.id);
-            // In futuro: chiudi questo modale e apri quello di modifica
-            // setSelectedTask(null);
-            // setIsNewTaskModalOpen(true);
-            // e passerai i dati della task da modificare
-          }}
-
-          // 6. Funzione opzionale (ha il '?' nell'interfaccia) per le sotto-task
-          onAddSubtask={(parentId: number) => {
-            console.log("Aggiungi sotto-task alla task principale con ID:", parentId);
-            // In futuro: apri il modale di nuova task passando il parentId
-          }}
+          onEditClick={() => { console.log("Modifica task"); }}
+          onAddSubtask={() => { console.log("Add subtask"); }}
         />
       )}
 

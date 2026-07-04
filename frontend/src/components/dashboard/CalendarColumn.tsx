@@ -18,11 +18,14 @@ interface CalendarColumnProps {
   forceView?: 'Mese' | 'Settimana';
   targetDate?: Date;
   variant?: 'classic' | 'detailed';
+  onSelectTask?: (task: Task) => void;
+  onToggleTask?: (task: Task, newStatus: boolean) => void;
 }
 
 const CalendarColumn: React.FC<CalendarColumnProps> = ({ 
   events, tasks, onSelectEvent, onAddEventClick, onDayClick, onMonthChange,
-  hideHeader, forceView, targetDate, variant = 'classic'
+  hideHeader, forceView, targetDate, variant = 'classic', onSelectTask,
+  onToggleTask
 }) => {
   const baseState = useCalendarState();
 
@@ -65,6 +68,8 @@ const CalendarColumn: React.FC<CalendarColumnProps> = ({
           onDayClick={onDayClick} 
           onSelectEvent={onSelectEvent} 
           variant={variant}
+          onSelectTask={onSelectTask}
+          onToggleTask={onToggleTask}
         />
       )}
 
