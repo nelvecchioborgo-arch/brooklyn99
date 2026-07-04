@@ -32,20 +32,22 @@ def get_owned(db: Session, entry_id: int, user_id: int) -> Optional[DailyEntry]:
     )
 
 
-def goal_exists(
-    db: Session,
-    user_id: int,
-    data_riferimento: date,
-    exclude_id: Optional[int] = None,
+def entry_exists_by_type(
+    db: Session, 
+    user_id: int, 
+    data_riferimento: date, 
+    tipo: str, 
+    exclude_id: int = None
 ) -> bool:
     query = db.query(DailyEntry).filter(
         DailyEntry.user_id == user_id,
         DailyEntry.data_riferimento == data_riferimento,
-        DailyEntry.tipo == "Obiettivo",
+        DailyEntry.tipo == tipo  # Ora cerca il tipo che gli passiamo noi (OD o OS)
     )
     if exclude_id is not None:
         query = query.filter(DailyEntry.id != exclude_id)
-    return query.first() is not None
+        
+    return db.query(query.exists()).scalar()
 
 
 def add(db: Session, entry: DailyEntry) -> DailyEntry:

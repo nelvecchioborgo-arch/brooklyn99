@@ -8,7 +8,7 @@ domini, senza dipendere da backend/api/.
 from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import and_, or_
-from sqlalchemy.orm import Session, selectinload, with_loader_criteria
+from sqlalchemy.orm import Query, Session, selectinload, with_loader_criteria
 
 from backend import models
 from backend.core.settings import get_settings
@@ -17,7 +17,7 @@ from backend.domains.events.service import populate_category_name as _populate_e
 from backend.domains.tasks.service import populate_category_name as _populate_task_category_name
 from backend.utils import expand_events_for_range
 
-from backend.domains.sync.schemas import SyncDayResponse, DailyEntryResponse
+from backend.domains.sync.schemas import SyncDayResponse, DailyEntryResponse, SyncWeekResponse
 from backend.domains.categories.schemas import CategoryResponse
 from backend.domains.countdowns.schemas import CountdownResponse
 from backend.domains.habits.schemas import HabitResponse
@@ -81,11 +81,11 @@ def get_day_sync(db: Session, current_user, data_riferimento: date) -> SyncDayRe
     priorita = []
     note = []
     for entry in entries_db:
-        if entry.tipo == "Obiettivo":
+        if entry.tipo == "OD":
             obiettivo = entry
-        elif entry.tipo == "Priorit\u00e0":
+        elif entry.tipo == "PD":
             priorita.append(entry)
-        elif entry.tipo == "Nota":
+        elif entry.tipo == "N1":
             note.append(entry)
 
     # ── Countdowns ──
@@ -158,4 +158,89 @@ def get_day_sync(db: Session, current_user, data_riferimento: date) -> SyncDayRe
         categories=[CategoryResponse.model_validate(c) for c in categories_db],
         shopping_lists=[ShoppingListResponse.model_validate(s) for s in shopping_db],
         countdowns=[CountdownResponse.model_validate(c) for c in countdowns_db],
+    )
+
+def get_week_sync(db: Session, current_user: models.User, start_date: date, end_date: date) -> SyncWeekResponse:
+    """
+    Aggrega tutti i dati di una data settimana per l'utente corrente.
+    """
+    # 1. Recupera le Entries Settimanali (Lunedì)
+    weekly_entries_db = (
+        db.query(models.DailyEntry)
+        .filter(
+            models.DailyEntry.user_id == current_user.id,
+            models.DailyEntry.data_riferimento == start_date,
+            models.DailyEntry.tipo.in_(["OS", "PS", "EP", "EN"]) # Codici brevi!
+        )
+        .order_by(models.DailyEntry.id.asc())
+        .all()
+    )
+
+    obiettivo_settimanale = None
+    priorita_settimanali = []
+    eventi_positivi = []
+    eventi_negativi = []
+
+    for entry in weekly_entries_db:
+        if entry.tipo == "OS":
+            obiettivo_settimanale = entry
+        elif entry.tipo == "PS":
+            priorita_settimanali.append(entry)
+        elif entry.tipo == "EP":
+            eventi_positivi.append(entry)
+        elif entry.tipo == "EN":
+            eventi_negativi.append(entry)
+
+    # 2. Recupera le Note di TUTTA la settimana
+    note_settimanali_db = (
+        db.query(models.DailyEntry)
+        .filter(
+            models.DailyEntry.user_id == current_user.id,
+            models.DailyEntry.tipo == "N1", # Assumendo che N1 sia il codice delle Note
+            models.DailyEntry.data_riferimento >= start_date,
+            models.DailyEntry.data_riferimento <= end_date
+        )
+        .order_by(models.DailyEntry.data_riferimento.asc(), models.DailyEntry.id.desc())
+        .all()
+    )
+
+    # 3. Recupera Eventi della settimana
+    eventi_db = (
+        db.query(models.Event)
+        .filter(models.Event.user_id == current_user.id)
+        .options(selectinload(models.Event.category))
+        .all()
+    )
+    # Usa le funzioni con l'underscore che hai importato in cima al file
+    _populate_event_category_name(eventi_db)
+    eventi_espansi = expand_events_for_range(eventi_db, start_date, end_date)
+    eventi_espansi.sort(key=lambda event: _to_utc_naive(event.data_inizio))
+
+    # 4. Recupera i Task pendenti o in scadenza nella settimana
+    lookback_threshold = datetime.now(UTC) - timedelta(days=DEFAULT_COMPLETED_TASK_LOOKBACK_DAYS)
+    tasks_db = (
+        db.query(models.Task)
+        .filter(models.Task.user_id == current_user.id)
+        .filter(
+            or_(
+                models.Task.fatto.is_(False),
+                and_(models.Task.fatto.is_(True), models.Task.data_fatto >= lookback_threshold),
+            )
+        )
+        .options(selectinload(models.Task.category), selectinload(models.Task.subtasks))
+        .all()
+    )
+    _populate_task_category_name(tasks_db)
+
+    # 5. Ritorna i dati formattati tramite Schema (che definirai in sync/schemas.py)
+    return SyncWeekResponse(
+        start_date=start_date,
+        end_date=end_date,
+        obiettivo_settimanale=DailyEntryResponse.model_validate(obiettivo_settimanale) if obiettivo_settimanale else None,
+        priorita_settimanali=[DailyEntryResponse.model_validate(p) for p in priorita_settimanali],
+        eventi_positivi=[DailyEntryResponse.model_validate(p) for p in eventi_positivi],
+        eventi_negativi=[DailyEntryResponse.model_validate(n) for n in eventi_negativi],
+        note=[DailyEntryResponse.model_validate(n) for n in note_settimanali_db],
+        events=eventi_espansi, # Assicurati che lo schema accetti la lista di eventi
+        tasks=[TaskResponse.model_validate(t) for t in tasks_db]
     )

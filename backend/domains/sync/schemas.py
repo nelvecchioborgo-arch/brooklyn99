@@ -40,3 +40,14 @@ __all__ = [
     "SyncDayResponse",
     "DailyEntryResponse",
 ]
+
+class SyncWeekResponse(BaseModel):
+    start_date: date
+    end_date: date
+    obiettivo_settimanale: Optional[DailyEntryResponse] = None
+    priorita_settimanali: List[DailyEntryResponse] = []
+    eventi_positivi: List[DailyEntryResponse] = []
+    eventi_negativi: List[DailyEntryResponse] = []
+    note: List[DailyEntryResponse] = []
+    events: List[EventResponse] = []
+    tasks: List[TaskResponse] = []

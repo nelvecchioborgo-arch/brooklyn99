@@ -28,6 +28,24 @@ export interface Task {
   subtasks: Task[]; 
 }
 
+export interface TaskSummary {
+  id: number;
+  title: string;
+  deadline: string;
+  dateStr: string;
+  done: boolean;
+  priority: 'Alta' | 'Media' | 'Bassa';
+  category: string;
+  categoryColor?: string;
+  description: string;
+  location: string;
+  parent_id?: number | null;
+  isUrgentFromSubtask?: boolean;
+  hasActiveSubtasks?: boolean;
+  isPromotedSubtask?: boolean;
+  data_fatto?: string | null;
+}
+
 // --- EVENTI ---
 export interface Event {
   id: number;
@@ -44,12 +62,28 @@ export interface Event {
   rrule?: string | null;
 }
 
+export interface CalendarEvent {
+  id: number | string;   
+  originalId?: number;
+  time?: string;
+  endTime?: string;
+  dateStr?: string;
+  endDateStr?: string;
+  title: string;
+  category: string;
+  categoryColor?: string; 
+  description?: string;
+  location?: string;
+  tutto_il_giorno?: boolean;
+  rrule?: string;
+}
+
 // --- DAILY ENTRIES (Obiettivi, Priorità, Note, Countdown) ---
 export interface DailyEntry {
   id: number;
   user_id: number;
   data_riferimento: string; 
-  tipo: 'Obiettivo' | 'Priorità' | 'Nota';
+  tipo: 'OD' | 'PD' | 'N1' | 'OW' | 'PW';
   testo: string;
   immagine_url?: string | null;
 }
@@ -126,6 +160,8 @@ export interface SaveHabitPayload {
   data: HabitFormData; 
 }
 
+// --- NOTE ---
+
 export interface NoteItem {
   id: number;
   text: string;
@@ -134,47 +170,8 @@ export interface NoteItem {
   isNew?: boolean; 
 }
 
-export const CategoryGenre = {
-  TASKS: 1,
-  EVENTS: 2,
-  COMMON: 3
-} as const;
+// ---- SYNC ----
 
-export type CategoryGenre = typeof CategoryGenre[keyof typeof CategoryGenre];
-
-export interface TaskSummary {
-  id: number;
-  title: string;
-  deadline: string;
-  dateStr: string;
-  done: boolean;
-  priority: 'Alta' | 'Media' | 'Bassa';
-  category: string;
-  categoryColor?: string;
-  description: string;
-  location: string;
-  parent_id?: number | null;
-  isUrgentFromSubtask?: boolean;
-  hasActiveSubtasks?: boolean;
-  isPromotedSubtask?: boolean;
-  data_fatto?: string | null;
-}
-
-export interface CalendarEvent {
-  id: number | string;   
-  originalId?: number;
-  time?: string;
-  endTime?: string;
-  dateStr?: string;
-  endDateStr?: string;
-  title: string;
-  category: string;
-  categoryColor?: string; 
-  description?: string;
-  location?: string;
-  tutto_il_giorno?: boolean;
-  rrule?: string;
-}
 
 export interface DaySyncResponse {
   tasks: Task[];
@@ -185,3 +182,25 @@ export interface DaySyncResponse {
   priorita?: DailyEntry[];
   note?: DailyEntry[];
 }
+
+export interface SyncWeekResponse {
+  start_date: string;
+  end_date: string;
+  obiettivo_settimanale: DailyEntry | null;
+  priorita_settimanali: DailyEntry[];
+  eventi_positivi: DailyEntry[];
+  eventi_negativi: DailyEntry[];
+  note: DailyEntry[];
+  events: Event[]; 
+  tasks: Task[];   
+}
+
+export type DailyEntryType = 'OD' | 'PD' | 'N1' | 'OS' | 'PS' | 'EP' | 'EN';
+
+export const CategoryGenre = {
+  TASKS: 1,
+  EVENTS: 2,
+  COMMON: 3
+} as const;
+
+export type CategoryGenre = typeof CategoryGenre[keyof typeof CategoryGenre];

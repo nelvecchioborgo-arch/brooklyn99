@@ -11,7 +11,7 @@ from backend.domains.users.models import User
 
 router = APIRouter(prefix="/daily-entries", tags=["daily_entries"])
 
-DailyEntryType = Literal["Obiettivo", "Priorità", "Nota"]
+DailyEntryType = Literal["OD", "PD", "N1", "N2", "N3", "N4", "OW", "PW", "OM", "PM", "EP", "EN"]
 
 
 @router.get("", response_model=List[schemas.DailyEntryResponse])
