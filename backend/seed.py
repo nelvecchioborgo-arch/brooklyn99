@@ -1,6 +1,6 @@
 import sys
 
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 
 from backend.database import SessionLocal
 from backend.models import Category, Config, ConfigCode, ShoppingSupplier, User
@@ -194,6 +194,20 @@ def _ensure_system_user(db) -> User:
 
     return user
 
+def _sync_users_id_sequence(db) -> None:
+    db.execute(
+        text(
+            """
+            SELECT setval(
+                pg_get_serial_sequence('users', 'id'),
+                COALESCE((SELECT MAX(id) FROM users), 1),
+                (SELECT MAX(id) IS NOT NULL FROM users)
+            )
+            """
+        )
+    )
+    db.flush()
+
 def _ensure_config(db) -> None:
     existing = db.query(Config).filter(Config.key == "max_subtask_depth").first()
     if existing is None:
@@ -371,6 +385,9 @@ def seed_database() -> None:
         print("[1/5] Verifica o creazione utente di sistema...")
         system_user = _ensure_system_user(db)
         db.commit()
+        _sync_users_id_sequence(db)
+        db.commit()
+        db.refresh(system_user)
         print(
             f"-> Utente di sistema pronto: id={system_user.id}, "
             f"username={system_user.username}, email={system_user.email}, "

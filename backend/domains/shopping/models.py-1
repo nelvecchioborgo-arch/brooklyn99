@@ -376,7 +376,7 @@ class ShoppingListItem(Base):
             f"product_id={self.product_id} purchased={self.is_purchased}>"
         )
     
-    @property
+        @property
     def product_name(self) -> Optional[str]:
         return self.product.name_normalized if self.product else None
 

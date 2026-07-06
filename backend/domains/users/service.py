@@ -18,14 +18,10 @@ def update_settings(db: Session, current_user: User, settings_in: schemas.UserSe
         current_user.email = data["email"]
 
     # Cambio password
-    if data.get("new_password") or data.get("confirm_new_password") or data.get("current_password"):
-        if not data.get("current_password") or not verify_password(
-            data["current_password"], current_user.password_hash
-        ):
+    # Grazie a Pydantic, sappiamo già che se c'è new_password, ci sono anche gli altri campi e le password coincidono
+    if "new_password" in data:
+        if not verify_password(data["current_password"], current_user.password_hash):
             raise HTTPException(status_code=400, detail="Password corrente non corretta")
-
-        if data.get("new_password") != data.get("confirm_new_password"):
-            raise HTTPException(status_code=400, detail="Le nuove password non coincidono")
 
         current_user.password_hash = get_password_hash(data["new_password"])
         # Sblocchiamo il flag del primo login

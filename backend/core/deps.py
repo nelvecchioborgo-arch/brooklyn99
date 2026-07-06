@@ -9,7 +9,7 @@ from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend import models
+from backend.core import models
 from backend.database import SessionLocal
 from backend.settings import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -19,7 +19,7 @@ from backend.settings import (
     SECRET_KEY,
 )
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 ph = PasswordHasher()
 
 

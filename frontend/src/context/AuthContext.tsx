@@ -82,7 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body.append('password', password);
 
       // 1. Chiamata Axios BASE per il login (Senza interceptor, prende solo i Token)
-      const res = await axios.post<TokenResponse>(apiUrl('/login'), body, {
+      const res = await axios.post<TokenResponse>(apiUrl('/auth/login'), body, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       });
 
@@ -122,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const normalizedUsername = username.trim().toLowerCase();
       const normalizedEmail = email.trim().toLowerCase();
 
-      await axios.post(apiUrl('/register'), { 
+      await axios.post(apiUrl('/auth/register'), { 
         username: normalizedUsername, 
         email: normalizedEmail, 
         password 

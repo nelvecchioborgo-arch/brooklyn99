@@ -3,8 +3,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from sqlalchemy import or_
-# Importiamo with_loader_criteria per il filtraggio automatico delle relazioni
-from sqlalchemy.orm import Session, selectinload, with_loader_criteria
+from sqlalchemy.orm import Session, selectinload
 
 from backend.domains.catalogs.models import ConfigCode
 from backend.domains.shopping.models import (
@@ -25,23 +24,6 @@ def _now() -> datetime:
 
 def _normalize_name(value: str) -> str:
     return value.strip().lower()
-
-
-# --- Helper per il Soft Delete Globale nelle Relazioni ---
-def _soft_delete_criteria():
-    """
-    Applica criteri globali per fare in modo che SQLAlchemy escluda AUTOMATICAMENTE
-    le entità soft-deletate quando vengono caricate tramite relazioni (es. selectinload).
-    """
-    return (
-        with_loader_criteria(ShoppingGroup, ShoppingGroup.deleted_at.is_(None)),
-        with_loader_criteria(ShoppingGroupMember, ShoppingGroupMember.removed_at.is_(None)),
-        with_loader_criteria(ShoppingList, ShoppingList.deleted_at.is_(None)),
-        with_loader_criteria(ShoppingListItem, ShoppingListItem.deleted_at.is_(None)),
-        with_loader_criteria(ShoppingProduct, ShoppingProduct.deleted_at.is_(None)),
-        with_loader_criteria(ShoppingSupplier, ShoppingSupplier.deleted_at.is_(None)),
-        with_loader_criteria(ShoppingPrice, ShoppingPrice.deleted_at.is_(None)),
-    )
 
 
 def _list_loaders():
@@ -85,7 +67,6 @@ def list_groups(db: Session, user_id: int) -> List[ShoppingGroup]:
     """List groups owned by user OR groups where user is an active member."""
     owned = (
         db.query(ShoppingGroup)
-        .options(*_soft_delete_criteria()) # Applica filtri sulle relazioni caricate
         .filter(
             ShoppingGroup.owner_id == user_id,
             ShoppingGroup.deleted_at.is_(None),
@@ -96,7 +77,6 @@ def list_groups(db: Session, user_id: int) -> List[ShoppingGroup]:
 
     member_of = (
         db.query(ShoppingGroup)
-        .options(*_soft_delete_criteria()) # Applica filtri sulle relazioni caricate
         .join(ShoppingGroupMember, ShoppingGroupMember.group_id == ShoppingGroup.id)
         .filter(
             ShoppingGroup.deleted_at.is_(None),
@@ -114,7 +94,6 @@ def list_groups(db: Session, user_id: int) -> List[ShoppingGroup]:
 def get_group_owned(db: Session, group_id: int, user_id: int) -> Optional[ShoppingGroup]:
     return (
         db.query(ShoppingGroup)
-        .options(*_soft_delete_criteria())
         .filter(
             ShoppingGroup.id == group_id,
             ShoppingGroup.owner_id == user_id,
@@ -128,7 +107,6 @@ def get_group_accessible(db: Session, group_id: int, user_id: int) -> Optional[S
     """Group the user owns OR is an active member of."""
     group = (
         db.query(ShoppingGroup)
-        .options(*_soft_delete_criteria())
         .filter(
             ShoppingGroup.id == group_id,
             ShoppingGroup.deleted_at.is_(None),
@@ -167,19 +145,7 @@ def update_group(db: Session, group: ShoppingGroup) -> ShoppingGroup:
 
 
 def delete_group(db: Session, group: ShoppingGroup) -> None:
-    """Implementazione Soft Delete per i Gruppi con gestione della cascata."""
-    now = _now()
-    group.deleted_at = now
-    
-    # Cascata soft delete sui membri attivi del gruppo
-    for member in group.members:
-        if member.removed_at is None:
-            member.removed_at = now
-            
-    # Comportamento ON DELETE SET NULL per le liste collegate a questo gruppo
-    for shopping_list in group.shopping_lists:
-        shopping_list.group_id = None
-        
+    db.delete(group)
     db.commit()
 
 
@@ -265,7 +231,7 @@ def active_group_status_id(db: Session) -> Optional[int]:
 def list_lists(db: Session, owner_id: int) -> List[ShoppingList]:
     return (
         db.query(ShoppingList)
-        .options(*_list_loaders(), *_soft_delete_criteria()) # Integra filtri su items e prezzi caricate
+        .options(*_list_loaders())
         .filter(
             ShoppingList.owner_id == owner_id,
             ShoppingList.deleted_at.is_(None),
@@ -278,7 +244,7 @@ def list_lists(db: Session, owner_id: int) -> List[ShoppingList]:
 def get_list_owned(db: Session, list_id: int, owner_id: int) -> Optional[ShoppingList]:
     return (
         db.query(ShoppingList)
-        .options(*_list_loaders(), *_soft_delete_criteria()) # Integra filtri su items e prezzi caricate
+        .options(*_list_loaders())
         .filter(
             ShoppingList.id == list_id,
             ShoppingList.owner_id == owner_id,
@@ -338,7 +304,7 @@ def list_items(
     query = (
         db.query(ShoppingListItem)
         .join(ShoppingList, ShoppingList.id == ShoppingListItem.shopping_list_id)
-        .options(*_item_loaders(), *_soft_delete_criteria())
+        .options(*_item_loaders())
         .filter(
             ShoppingList.owner_id == owner_id,
             ShoppingList.deleted_at.is_(None),
@@ -359,7 +325,7 @@ def get_item_owned(db: Session, item_id: int, owner_id: int) -> Optional[Shoppin
     return (
         db.query(ShoppingListItem)
         .join(ShoppingList, ShoppingList.id == ShoppingListItem.shopping_list_id)
-        .options(*_item_loaders(), *_soft_delete_criteria())
+        .options(*_item_loaders())
         .filter(
             ShoppingListItem.id == item_id,
             ShoppingList.owner_id == owner_id,
@@ -503,32 +469,5 @@ def refresh(db: Session, obj) -> None:
 
 
 def delete(db: Session, obj) -> None:
-    """
-    Implementazione generica del Soft Delete.
-    Se l'oggetto possiede l'attributo `deleted_at`, imposta il timestamp anziché 
-    eliminarlo fisicamente, gestendo ricorsivamente la cascata logica sulle relazioni.
-    """
-    if hasattr(obj, "deleted_at"):
-        now = _now()
-        obj.deleted_at = now
-        
-        # Gestione manuale della cascata logica (Soft Delete Cascade)
-        if isinstance(obj, ShoppingList):
-            # Se eliminiamo una lista, eliminiamo tutti i suoi articoli e i log dei prezzi
-            for item in obj.items:
-                if item.deleted_at is None:
-                    item.deleted_at = now
-            for price in obj.prices:
-                if price.deleted_at is None:
-                    price.deleted_at = now
-                    
-        elif isinstance(obj, ShoppingListItem):
-            # Se eliminiamo un singolo articolo, eliminiamo anche la cronologia dei suoi prezzi registrati
-            for price in obj.prices:
-                if price.deleted_at is None:
-                    price.deleted_at = now
-    else:
-        # Se l'entità non prevede il soft delete, esegui l'hard delete di sicurezza
-        db.delete(obj)
-        
+    db.delete(obj)
     db.commit()

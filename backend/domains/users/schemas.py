@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pydantic import EmailStr, Field, field_validator
+# Aggiunto model_validator
+from pydantic import EmailStr, Field, field_validator, model_validator
 
 from backend.core.schemas import ORMBaseModel, StrictBaseModel
 
@@ -63,6 +64,8 @@ class UserSettingsUpdate(StrictBaseModel):
     confirm_new_password: Optional[str] = Field(None, min_length=6, max_length=255)
     max_subtask_depth_user: Optional[int] = Field(None, ge=1, le=15)
 
+    # Convertito in validatore di modello post-inizializzazione
+    @model_validator(mode="after")
     def validate_password_change(self) -> "UserSettingsUpdate":
         provided = [self.current_password, self.new_password, self.confirm_new_password]
         if any(value is not None for value in provided):

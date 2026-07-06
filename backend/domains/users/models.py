@@ -15,13 +15,20 @@ from backend.core.database import Base
 if TYPE_CHECKING:
     from backend.domains.tasks.models import Task
     from backend.domains.events.models import Event
-    from backend.domains.shopping.models import ShoppingGroup, ShoppingGroupMember, ShoppingList, ShoppingListItem, ShoppingPrice, ShoppingSupplier
+    from backend.domains.shopping.models import (
+        ShoppingGroup,
+        ShoppingGroupMember,
+        ShoppingList,
+        ShoppingListItem,
+        ShoppingPrice,
+        ShoppingProduct,
+        ShoppingSupplier,
+    )
     from backend.domains.audit.models import SharedActivityLog
     from backend.domains.notifications.models import Notification
     from backend.domains.planning.models import DailyEntry
     from backend.domains.countdowns.models import Countdown
     from backend.domains.habits.models import Habit
-
 
 class User(Base):
     """User account and authentication."""
@@ -85,17 +92,43 @@ class User(Base):
         "ShoppingListItem",
         foreign_keys="ShoppingListItem.updated_by_user_id",
     )
-    shopping_items_purchased: Mapped[List["ShoppingListItem"]] = relationship(
-        "ShoppingListItem",
-        foreign_keys="ShoppingListItem.purchased_by_user_id",
+#    shopping_items_purchased: Mapped[List["ShoppingListItem"]] = relationship(
+#        "ShoppingListItem",
+#        foreign_keys="ShoppingListItem.purchased_by_user_id",
+#    )    
+    # Assicurati di avere queste definizioni:
+    shopping_prices_purchased: Mapped[List["ShoppingPrice"]] = relationship(
+        "ShoppingPrice",
+        foreign_keys="ShoppingPrice.purchased_by_user_id",
+        back_populates="purchased_by_user",
     )
     shopping_prices_created: Mapped[List["ShoppingPrice"]] = relationship(
         "ShoppingPrice",
         foreign_keys="ShoppingPrice.created_by_user_id",
+        back_populates="created_by_user",
     )
     shopping_prices_updated: Mapped[List["ShoppingPrice"]] = relationship(
         "ShoppingPrice",
         foreign_keys="ShoppingPrice.updated_by_user_id",
+        back_populates="updated_by_user",
+    )
+#    shopping_prices_created: Mapped[List["ShoppingPrice"]] = relationship(
+#        "ShoppingPrice",
+#        foreign_keys="ShoppingPrice.created_by_user_id",
+#    )
+#    shopping_prices_updated: Mapped[List["ShoppingPrice"]] = relationship(
+#        "ShoppingPrice",
+#        foreign_keys="ShoppingPrice.updated_by_user_id",
+#    )
+    shopping_products_created: Mapped[List["ShoppingProduct"]] = relationship(
+        "ShoppingProduct",
+        foreign_keys="ShoppingProduct.created_by_user_id",
+        back_populates="created_by_user",
+    )
+    shopping_products_updated: Mapped[List["ShoppingProduct"]] = relationship(
+        "ShoppingProduct",
+        foreign_keys="ShoppingProduct.updated_by_user_id",
+        back_populates="updated_by_user",
     )
     shopping_suppliers_created: Mapped[List["ShoppingSupplier"]] = relationship(
         "ShoppingSupplier",
