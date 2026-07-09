@@ -24,8 +24,9 @@ from backend.domains.shopping.models import (  # noqa
     ShoppingGroupMember,
     ShoppingList,
     ShoppingListItem,
-    ShoppingPrice,
+    ShoppingProduct,      # AGGIUNTO: mancava
     ShoppingSupplier,
+    InventoryBatch,       # MODIFICATO: rimpiazza ShoppingPrice
 )
 from backend.domains.tasks.models import Task  # noqa
 from backend.domains.users.models import User  # noqa
@@ -47,8 +48,9 @@ __all__ = [
     "ShoppingGroupMember",
     "ShoppingList",
     "ShoppingListItem",
+    "ShoppingProduct",    # AGGIUNTO
     "ShoppingSupplier",
-    "ShoppingPrice",
+    "InventoryBatch",     # MODIFICATO
     # Audit
     "SharedActivityLog",
     # Notifications

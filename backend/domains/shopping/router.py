@@ -1,7 +1,8 @@
 """Router HTTP del dominio Shopping (prefix /shopping)."""
+
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from backend.core import deps
@@ -11,7 +12,7 @@ from backend.domains.users.models import User
 router = APIRouter(prefix="/shopping", tags=["shopping"])
 
 
-# ────────────────────────────────────────────────────────────────── Groups
+# ------------------------------------------------------------------ Groups
 @router.get("/groups", response_model=List[schemas.ShoppingGroupResponse])
 def list_groups(
     db: Session = Depends(deps.get_db),
@@ -20,7 +21,11 @@ def list_groups(
     return service.list_groups(db, current_user)
 
 
-@router.post("/groups", response_model=schemas.ShoppingGroupResponse, status_code=201)
+@router.post(
+    "/groups",
+    response_model=schemas.ShoppingGroupResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_group(
     group_in: schemas.ShoppingGroupCreate,
     db: Session = Depends(deps.get_db),
@@ -39,16 +44,21 @@ def update_group(
     return service.update_group(db, current_user, group_id, group_in)
 
 
-@router.delete("/groups/{group_id}", status_code=204)
+@router.delete(
+    "/groups/{group_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 def delete_group(
     group_id: int,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
     service.delete_group(db, current_user, group_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-# ────────────────────────────────────────────────────────────────── Group Members
+# ------------------------------------------------------------------ Group Members
 @router.get("/groups/{group_id}/members", response_model=List[schemas.ShoppingGroupMemberResponse])
 def list_members(
     group_id: int,
@@ -58,7 +68,11 @@ def list_members(
     return service.list_members(db, current_user, group_id)
 
 
-@router.post("/groups/{group_id}/members", response_model=schemas.ShoppingGroupMemberResponse, status_code=201)
+@router.post(
+    "/groups/{group_id}/members",
+    response_model=schemas.ShoppingGroupMemberResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def add_member(
     group_id: int,
     member_in: schemas.ShoppingGroupMemberCreate,
@@ -68,14 +82,17 @@ def add_member(
     return service.add_member(db, current_user, group_id, member_in)
 
 
-@router.post("/groups/{group_id}/invite", response_model=schemas.ShoppingGroupMemberResponse, status_code=201)
+@router.post(
+    "/groups/{group_id}/invite",
+    response_model=schemas.ShoppingGroupMemberResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def invite_member(
     group_id: int,
     invite_in: schemas.ShoppingGroupMemberInvite,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
-    """Invita un utente in un gruppo tramite username o email + role_code."""
     return service.invite_member(db, current_user, group_id, invite_in)
 
 
@@ -90,7 +107,11 @@ def update_member_role(
     return service.update_member_role(db, current_user, group_id, user_id, role_in)
 
 
-@router.delete("/groups/{group_id}/members/{user_id}", status_code=204)
+@router.delete(
+    "/groups/{group_id}/members/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 def remove_member(
     group_id: int,
     user_id: int,
@@ -98,9 +119,10 @@ def remove_member(
     current_user: User = Depends(deps.get_current_user),
 ):
     service.remove_member(db, current_user, group_id, user_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-# ────────────────────────────────────────────────────────────────── Lists
+# ------------------------------------------------------------------ Lists
 @router.get("/lists", response_model=List[schemas.ShoppingListResponse])
 def list_shopping_lists(
     db: Session = Depends(deps.get_db),
@@ -109,7 +131,11 @@ def list_shopping_lists(
     return service.list_lists(db, current_user)
 
 
-@router.post("/lists", response_model=schemas.ShoppingListResponse, status_code=201)
+@router.post(
+    "/lists",
+    response_model=schemas.ShoppingListResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_shopping_list(
     list_in: schemas.ShoppingListCreate,
     db: Session = Depends(deps.get_db),
@@ -128,16 +154,21 @@ def update_shopping_list(
     return service.update_list(db, current_user, list_id, list_in)
 
 
-@router.delete("/lists/{list_id}", status_code=204)
+@router.delete(
+    "/lists/{list_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 def delete_shopping_list(
     list_id: int,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
     service.delete_list(db, current_user, list_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-# ────────────────────────────────────────────────────────────────── Products
+# ------------------------------------------------------------------ Products
 @router.get("/products", response_model=List[schemas.ShoppingProductResponse])
 def list_products(
     search: Optional[str] = Query(None, min_length=1, max_length=255),
@@ -157,7 +188,7 @@ def get_product(
     return service.get_product(db, current_user, product_id)
 
 
-# ────────────────────────────────────────────────────────────────── Items
+# ------------------------------------------------------------------ Items
 @router.get("/items", response_model=List[schemas.ShoppingListItemResponse])
 def list_shopping_items(
     is_purchased: Optional[bool] = Query(None),
@@ -173,7 +204,11 @@ def list_shopping_items(
     )
 
 
-@router.post("/items", response_model=schemas.ShoppingListItemResponse, status_code=201)
+@router.post(
+    "/items",
+    response_model=schemas.ShoppingListItemResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_shopping_item(
     item_in: schemas.ShoppingListItemCreate,
     db: Session = Depends(deps.get_db),
@@ -192,16 +227,21 @@ def update_shopping_item(
     return service.update_item(db, current_user, item_id, item_in)
 
 
-@router.delete("/items/{item_id}", status_code=204)
+@router.delete(
+    "/items/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 def delete_shopping_item(
     item_id: int,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
     service.delete_item(db, current_user, item_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-# ────────────────────────────────────────────────────────────────── Suppliers
+# ------------------------------------------------------------------ Suppliers
 @router.get("/suppliers", response_model=List[schemas.ShoppingSupplierResponse])
 def list_suppliers(
     search: Optional[str] = Query(None, min_length=1, max_length=255),
@@ -212,7 +252,11 @@ def list_suppliers(
     return service.list_suppliers(db, current_user, search=search, limit=limit)
 
 
-@router.post("/suppliers", response_model=schemas.ShoppingSupplierResponse, status_code=201)
+@router.post(
+    "/suppliers",
+    response_model=schemas.ShoppingSupplierResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_supplier(
     supplier_in: schemas.ShoppingSupplierCreate,
     db: Session = Depends(deps.get_db),
@@ -231,40 +275,54 @@ def update_supplier(
     return service.update_supplier(db, current_user, supplier_id, supplier_in)
 
 
-@router.delete("/suppliers/{supplier_id}", status_code=204)
+@router.delete(
+    "/suppliers/{supplier_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 def delete_supplier(
     supplier_id: int,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
     service.delete_supplier(db, current_user, supplier_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-# ────────────────────────────────────────────────────────────────── Prices
-@router.post("/items/{item_id}/prices", response_model=schemas.ShoppingPriceResponse, status_code=201)
-def add_shopping_price(
+# ------------------------------------------------------------------ Inventory Batches
+@router.post(
+    "/items/{item_id}/inventory-batches",
+    response_model=schemas.InventoryBatchResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_inventory_batch(
     item_id: int,
-    price_in: schemas.ShoppingPriceCreate,
+    batch_in: schemas.InventoryBatchCreate,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
-    return service.add_price(db, current_user, item_id, price_in)
+    return service.add_inventory_batch(db, current_user, item_id, batch_in)
 
 
-@router.patch("/prices/{price_id}", response_model=schemas.ShoppingPriceResponse)
-def update_shopping_price(
-    price_id: int,
-    price_in: schemas.ShoppingPriceUpdate,
+@router.patch("/inventory-batches/{batch_id}", response_model=schemas.InventoryBatchResponse)
+def update_inventory_batch(
+    batch_id: int,
+    batch_in: schemas.InventoryBatchUpdate,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
-    return service.update_price(db, current_user, price_id, price_in)
+    return service.update_inventory_batch(db, current_user, batch_id, batch_in)
 
 
-@router.delete("/prices/{price_id}", status_code=204)
-def delete_shopping_price(
-    price_id: int,
+@router.delete(
+    "/inventory-batches/{batch_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+def delete_inventory_batch(
+    batch_id: int,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
-    service.delete_price(db, current_user, price_id)
+    service.delete_inventory_batch(db, current_user, batch_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,9 +1,9 @@
 """Repository del dominio Shopping — solo accesso ai dati."""
-from datetime import datetime, timezone
+
+from datetime import date, datetime, timezone
 from typing import List, Optional
 
 from sqlalchemy import or_
-# Importiamo with_loader_criteria per il filtraggio automatico delle relazioni
 from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 
 from backend.domains.catalogs.models import ConfigCode
@@ -12,7 +12,7 @@ from backend.domains.shopping.models import (
     ShoppingGroupMember,
     ShoppingList,
     ShoppingListItem,
-    ShoppingPrice,
+    InventoryBatch,
     ShoppingProduct,
     ShoppingSupplier,
 )
@@ -23,24 +23,34 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _today() -> date:
+    return date.today()
+
+
 def _normalize_name(value: str) -> str:
     return value.strip().lower()
 
 
-# --- Helper per il Soft Delete Globale nelle Relazioni ---
 def _soft_delete_criteria():
-    """
-    Applica criteri globali per fare in modo che SQLAlchemy escluda AUTOMATICAMENTE
-    le entità soft-deletate quando vengono caricate tramite relazioni (es. selectinload).
-    """
     return (
-        with_loader_criteria(ShoppingGroup, ShoppingGroup.deleted_at.is_(None)),
-        with_loader_criteria(ShoppingGroupMember, ShoppingGroupMember.removed_at.is_(None)),
-        with_loader_criteria(ShoppingList, ShoppingList.deleted_at.is_(None)),
-        with_loader_criteria(ShoppingListItem, ShoppingListItem.deleted_at.is_(None)),
-        with_loader_criteria(ShoppingProduct, ShoppingProduct.deleted_at.is_(None)),
-        with_loader_criteria(ShoppingSupplier, ShoppingSupplier.deleted_at.is_(None)),
-        with_loader_criteria(ShoppingPrice, ShoppingPrice.deleted_at.is_(None)),
+        with_loader_criteria(ShoppingGroup, ShoppingGroup.deleted_at.is_(None), include_aliases=True),
+        with_loader_criteria(ShoppingGroupMember, ShoppingGroupMember.removed_at.is_(None), include_aliases=True),
+        with_loader_criteria(ShoppingList, ShoppingList.deleted_at.is_(None), include_aliases=True),
+        with_loader_criteria(ShoppingListItem, ShoppingListItem.deleted_at.is_(None), include_aliases=True),
+        with_loader_criteria(ShoppingProduct, ShoppingProduct.deleted_at.is_(None), include_aliases=True),
+        with_loader_criteria(ShoppingSupplier, ShoppingSupplier.deleted_at.is_(None), include_aliases=True),
+        with_loader_criteria(InventoryBatch, InventoryBatch.deleted_at.is_(None), include_aliases=True),
+    )
+
+
+def _batch_loaders():
+    return (
+        selectinload(InventoryBatch.product),
+        selectinload(InventoryBatch.supplier),
+        selectinload(InventoryBatch.list_item),
+        selectinload(InventoryBatch.purchased_by_user),
+        selectinload(InventoryBatch.created_by_user),
+        selectinload(InventoryBatch.updated_by_user),
     )
 
 
@@ -51,41 +61,43 @@ def _list_loaders():
         selectinload(ShoppingList.items).selectinload(ShoppingListItem.created_by_user),
         selectinload(ShoppingList.items).selectinload(ShoppingListItem.updated_by_user),
         selectinload(ShoppingList.items)
-        .selectinload(ShoppingListItem.prices)
-        .selectinload(ShoppingPrice.product),
+        .selectinload(ShoppingListItem.inventory_batches)
+        .selectinload(InventoryBatch.product),
         selectinload(ShoppingList.items)
-        .selectinload(ShoppingListItem.prices)
-        .selectinload(ShoppingPrice.supplier),
+        .selectinload(ShoppingListItem.inventory_batches)
+        .selectinload(InventoryBatch.supplier),
         selectinload(ShoppingList.items)
-        .selectinload(ShoppingListItem.prices)
-        .selectinload(ShoppingPrice.created_by_user),
+        .selectinload(ShoppingListItem.inventory_batches)
+        .selectinload(InventoryBatch.created_by_user),
         selectinload(ShoppingList.items)
-        .selectinload(ShoppingListItem.prices)
-        .selectinload(ShoppingPrice.purchased_by_user),
-        selectinload(ShoppingList.prices).selectinload(ShoppingPrice.product),
-        selectinload(ShoppingList.prices).selectinload(ShoppingPrice.supplier),
+        .selectinload(ShoppingListItem.inventory_batches)
+        .selectinload(InventoryBatch.updated_by_user),
+        selectinload(ShoppingList.items)
+        .selectinload(ShoppingListItem.inventory_batches)
+        .selectinload(InventoryBatch.purchased_by_user),
     )
 
 
 def _item_loaders():
     return (
+        selectinload(ShoppingListItem.shopping_list),
         selectinload(ShoppingListItem.product),
         selectinload(ShoppingListItem.unit),
         selectinload(ShoppingListItem.created_by_user),
         selectinload(ShoppingListItem.updated_by_user),
-        selectinload(ShoppingListItem.prices).selectinload(ShoppingPrice.product),
-        selectinload(ShoppingListItem.prices).selectinload(ShoppingPrice.supplier),
-        selectinload(ShoppingListItem.prices).selectinload(ShoppingPrice.created_by_user),
-        selectinload(ShoppingListItem.prices).selectinload(ShoppingPrice.purchased_by_user),
+        selectinload(ShoppingListItem.inventory_batches).selectinload(InventoryBatch.product),
+        selectinload(ShoppingListItem.inventory_batches).selectinload(InventoryBatch.supplier),
+        selectinload(ShoppingListItem.inventory_batches).selectinload(InventoryBatch.created_by_user),
+        selectinload(ShoppingListItem.inventory_batches).selectinload(InventoryBatch.updated_by_user),
+        selectinload(ShoppingListItem.inventory_batches).selectinload(InventoryBatch.purchased_by_user),
     )
 
 
-# --- Groups ---
+# ------------------------------------------------------------------ Groups
 def list_groups(db: Session, user_id: int) -> List[ShoppingGroup]:
-    """List groups owned by user OR groups where user is an active member."""
     owned = (
         db.query(ShoppingGroup)
-        .options(*_soft_delete_criteria()) # Applica filtri sulle relazioni caricate
+        .options(*_soft_delete_criteria())
         .filter(
             ShoppingGroup.owner_id == user_id,
             ShoppingGroup.deleted_at.is_(None),
@@ -96,7 +108,7 @@ def list_groups(db: Session, user_id: int) -> List[ShoppingGroup]:
 
     member_of = (
         db.query(ShoppingGroup)
-        .options(*_soft_delete_criteria()) # Applica filtri sulle relazioni caricate
+        .options(*_soft_delete_criteria())
         .join(ShoppingGroupMember, ShoppingGroupMember.group_id == ShoppingGroup.id)
         .filter(
             ShoppingGroup.deleted_at.is_(None),
@@ -125,7 +137,6 @@ def get_group_owned(db: Session, group_id: int, user_id: int) -> Optional[Shoppi
 
 
 def get_group_accessible(db: Session, group_id: int, user_id: int) -> Optional[ShoppingGroup]:
-    """Group the user owns OR is an active member of."""
     group = (
         db.query(ShoppingGroup)
         .options(*_soft_delete_criteria())
@@ -167,23 +178,21 @@ def update_group(db: Session, group: ShoppingGroup) -> ShoppingGroup:
 
 
 def delete_group(db: Session, group: ShoppingGroup) -> None:
-    """Implementazione Soft Delete per i Gruppi con gestione della cascata."""
     now = _now()
     group.deleted_at = now
-    
-    # Cascata soft delete sui membri attivi del gruppo
+
     for member in group.members:
         if member.removed_at is None:
             member.removed_at = now
-            
-    # Comportamento ON DELETE SET NULL per le liste collegate a questo gruppo
+
     for shopping_list in group.shopping_lists:
-        shopping_list.group_id = None
-        
+        if shopping_list.deleted_at is None:
+            shopping_list.group_id = None
+
     db.commit()
 
 
-# --- Group Members ---
+# ------------------------------------------------------------------ Group Members
 def list_members(db: Session, group_id: int) -> List[ShoppingGroupMember]:
     return (
         db.query(ShoppingGroupMember)
@@ -261,11 +270,11 @@ def active_group_status_id(db: Session) -> Optional[int]:
     )
 
 
-# --- Lists ---
+# ------------------------------------------------------------------ Lists
 def list_lists(db: Session, owner_id: int) -> List[ShoppingList]:
     return (
         db.query(ShoppingList)
-        .options(*_list_loaders(), *_soft_delete_criteria()) # Integra filtri su items e prezzi caricate
+        .options(*_list_loaders(), *_soft_delete_criteria())
         .filter(
             ShoppingList.owner_id == owner_id,
             ShoppingList.deleted_at.is_(None),
@@ -278,7 +287,7 @@ def list_lists(db: Session, owner_id: int) -> List[ShoppingList]:
 def get_list_owned(db: Session, list_id: int, owner_id: int) -> Optional[ShoppingList]:
     return (
         db.query(ShoppingList)
-        .options(*_list_loaders(), *_soft_delete_criteria()) # Integra filtri su items e prezzi caricate
+        .options(*_list_loaders(), *_soft_delete_criteria())
         .filter(
             ShoppingList.id == list_id,
             ShoppingList.owner_id == owner_id,
@@ -288,22 +297,15 @@ def get_list_owned(db: Session, list_id: int, owner_id: int) -> Optional[Shoppin
     )
 
 
-# --- Products ---
+# ------------------------------------------------------------------ Products
 def list_products(db: Session, search: Optional[str] = None, limit: int = 50) -> List[ShoppingProduct]:
-    query = (
-        db.query(ShoppingProduct)
-        .filter(ShoppingProduct.deleted_at.is_(None))
-    )
+    query = db.query(ShoppingProduct).filter(ShoppingProduct.deleted_at.is_(None))
 
     if search:
         normalized = _normalize_name(search)
         query = query.filter(ShoppingProduct.name_normalized.ilike(f"{normalized}%"))
 
-    return (
-        query.order_by(ShoppingProduct.name_normalized.asc())
-        .limit(limit)
-        .all()
-    )
+    return query.order_by(ShoppingProduct.name_normalized.asc()).limit(limit).all()
 
 
 def get_product(db: Session, product_id: int) -> Optional[ShoppingProduct]:
@@ -328,7 +330,7 @@ def get_product_by_name_normalized(db: Session, name_normalized: str) -> Optiona
     )
 
 
-# --- Items ---
+# ------------------------------------------------------------------ Items
 def list_items(
     db: Session,
     owner_id: int,
@@ -355,6 +357,18 @@ def list_items(
     return query.order_by(ShoppingListItem.created_at.asc()).all()
 
 
+def get_item(db: Session, item_id: int) -> Optional[ShoppingListItem]:
+    return (
+        db.query(ShoppingListItem)
+        .options(*_item_loaders(), *_soft_delete_criteria())
+        .filter(
+            ShoppingListItem.id == item_id,
+            ShoppingListItem.deleted_at.is_(None),
+        )
+        .first()
+    )
+
+
 def get_item_owned(db: Session, item_id: int, owner_id: int) -> Optional[ShoppingListItem]:
     return (
         db.query(ShoppingListItem)
@@ -370,7 +384,19 @@ def get_item_owned(db: Session, item_id: int, owner_id: int) -> Optional[Shoppin
     )
 
 
-# --- Suppliers ---
+def item_has_active_batches(db: Session, list_item_id: int) -> bool:
+    return (
+        db.query(InventoryBatch.id)
+        .filter(
+            InventoryBatch.list_item_id == list_item_id,
+            InventoryBatch.deleted_at.is_(None),
+        )
+        .first()
+        is not None
+    )
+
+
+# ------------------------------------------------------------------ Suppliers
 def list_suppliers(db: Session) -> List[ShoppingSupplier]:
     return (
         db.query(ShoppingSupplier)
@@ -405,13 +431,14 @@ def find_supplier_by_name(db: Session, name: str) -> Optional[ShoppingSupplier]:
 
 def search_suppliers(db: Session, search: str, limit: int = 50) -> List[ShoppingSupplier]:
     normalized = _normalize_name(search)
+    raw = search.strip()
     return (
         db.query(ShoppingSupplier)
         .filter(
             ShoppingSupplier.deleted_at.is_(None),
             or_(
                 ShoppingSupplier.name_normalized.ilike(f"{normalized}%"),
-                ShoppingSupplier.name.ilike(f"{search.strip()}%"),
+                ShoppingSupplier.name.ilike(f"{raw}%"),
             ),
         )
         .order_by(ShoppingSupplier.name.asc())
@@ -420,12 +447,12 @@ def search_suppliers(db: Session, search: str, limit: int = 50) -> List[Shopping
     )
 
 
-def supplier_has_prices(db: Session, supplier_id: int) -> bool:
+def supplier_has_batches(db: Session, supplier_id: int) -> bool:
     return (
-        db.query(ShoppingPrice)
+        db.query(InventoryBatch.id)
         .filter(
-            ShoppingPrice.supplier_id == supplier_id,
-            ShoppingPrice.deleted_at.is_(None),
+            InventoryBatch.supplier_id == supplier_id,
+            InventoryBatch.deleted_at.is_(None),
         )
         .first()
         is not None
@@ -443,26 +470,20 @@ def active_supplier_status_id(db: Session) -> Optional[int]:
     )
 
 
-# --- Prices ---
-def list_prices_for_product(
+# ------------------------------------------------------------------ Inventory Batches
+def list_batches_for_product(
     db: Session,
     product_id: int,
     limit: Optional[int] = None,
-) -> List[ShoppingPrice]:
+) -> List[InventoryBatch]:
     query = (
-        db.query(ShoppingPrice)
-        .options(
-            selectinload(ShoppingPrice.product),
-            selectinload(ShoppingPrice.supplier),
-            selectinload(ShoppingPrice.purchased_by_user),
-            selectinload(ShoppingPrice.created_by_user),
-            selectinload(ShoppingPrice.updated_by_user),
-        )
+        db.query(InventoryBatch)
+        .options(*_batch_loaders(), *_soft_delete_criteria())
         .filter(
-            ShoppingPrice.product_id == product_id,
-            ShoppingPrice.deleted_at.is_(None),
+            InventoryBatch.product_id == product_id,
+            InventoryBatch.deleted_at.is_(None),
         )
-        .order_by(ShoppingPrice.purchase_date.desc(), ShoppingPrice.created_at.desc())
+        .order_by(InventoryBatch.purchase_date.desc(), InventoryBatch.created_at.desc())
     )
 
     if limit is not None:
@@ -471,25 +492,19 @@ def list_prices_for_product(
     return query.all()
 
 
-def get_price(db: Session, price_id: int) -> Optional[ShoppingPrice]:
+def get_batch(db: Session, batch_id: int) -> Optional[InventoryBatch]:
     return (
-        db.query(ShoppingPrice)
-        .options(
-            selectinload(ShoppingPrice.product),
-            selectinload(ShoppingPrice.supplier),
-            selectinload(ShoppingPrice.purchased_by_user),
-            selectinload(ShoppingPrice.created_by_user),
-            selectinload(ShoppingPrice.updated_by_user),
-        )
+        db.query(InventoryBatch)
+        .options(*_batch_loaders(), *_soft_delete_criteria())
         .filter(
-            ShoppingPrice.id == price_id,
-            ShoppingPrice.deleted_at.is_(None),
+            InventoryBatch.id == batch_id,
+            InventoryBatch.deleted_at.is_(None),
         )
         .first()
     )
 
 
-# --- Generic ---
+# ------------------------------------------------------------------ Generic helpers
 def add(db: Session, obj) -> None:
     db.add(obj)
 
@@ -503,32 +518,45 @@ def refresh(db: Session, obj) -> None:
 
 
 def delete(db: Session, obj) -> None:
-    """
-    Implementazione generica del Soft Delete.
-    Se l'oggetto possiede l'attributo `deleted_at`, imposta il timestamp anziché 
-    eliminarlo fisicamente, gestendo ricorsivamente la cascata logica sulle relazioni.
-    """
     if hasattr(obj, "deleted_at"):
-        now = _now()
-        obj.deleted_at = now
-        
-        # Gestione manuale della cascata logica (Soft Delete Cascade)
-        if isinstance(obj, ShoppingList):
-            # Se eliminiamo una lista, eliminiamo tutti i suoi articoli e i log dei prezzi
+        if isinstance(obj, InventoryBatch):
+            obj.deleted_at = _today()
+            if hasattr(obj, "updated_at"):
+                obj.updated_at = _today()
+
+        elif isinstance(obj, ShoppingList):
+            now = _now()
+            today = _today()
+            obj.deleted_at = now
+
             for item in obj.items:
                 if item.deleted_at is None:
                     item.deleted_at = now
-            for price in obj.prices:
-                if price.deleted_at is None:
-                    price.deleted_at = now
-                    
+                    if hasattr(item, "updated_at"):
+                        item.updated_at = now
+
+                    for batch in item.inventory_batches:
+                        if batch.deleted_at is None:
+                            batch.deleted_at = today
+                            batch.updated_at = today
+
         elif isinstance(obj, ShoppingListItem):
-            # Se eliminiamo un singolo articolo, eliminiamo anche la cronologia dei suoi prezzi registrati
-            for price in obj.prices:
-                if price.deleted_at is None:
-                    price.deleted_at = now
+            now = _now()
+            today = _today()
+            obj.deleted_at = now
+            if hasattr(obj, "updated_at"):
+                obj.updated_at = now
+
+            for batch in obj.inventory_batches:
+                if batch.deleted_at is None:
+                    batch.deleted_at = today
+                    batch.updated_at = today
+
+        else:
+            obj.deleted_at = _now()
+            if hasattr(obj, "updated_at"):
+                obj.updated_at = _now()
     else:
-        # Se l'entità non prevede il soft delete, esegui l'hard delete di sicurezza
         db.delete(obj)
-        
+
     db.commit()

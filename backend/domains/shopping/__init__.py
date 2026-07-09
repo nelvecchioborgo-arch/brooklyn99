@@ -1,12 +1,13 @@
 """
-Shopping domain - Collaborative shopping and price tracking.
+Shopping domain - Collaborative shopping and inventory tracking.
 """
 from backend.domains.shopping.models import (
     ShoppingGroup,
     ShoppingGroupMember,
     ShoppingList,
     ShoppingListItem,
-    ShoppingPrice,
+    ShoppingProduct,        # AGGIUNTO: mancava nell'import originale
+    InventoryBatch,
     ShoppingSupplier,
 )
 from backend.domains.shopping.schemas import (
@@ -25,9 +26,13 @@ from backend.domains.shopping.schemas import (
     ShoppingListItemUpdate,
     ShoppingListResponse,
     ShoppingListUpdate,
-    ShoppingPriceCreate,
-    ShoppingPriceResponse,
-    ShoppingPriceUpdate,
+    # NOTA: qui ci sono ancora gli schemi di ShoppingPrice perché 
+    # non abbiamo ancora aggiornato schemas.py, ma non appena lo 
+    # faremo andranno cambiati in InventoryBatchCreate ecc.
+    # Per ora li lasciamo per far partire l'app, o fallirà schemas.py
+    InventoryBatchCreate,
+    InventoryBatchUpdate,
+    InventoryBatchResponse,
     ShoppingSupplierCreate,
     ShoppingSupplierResponse,
     ShoppingSupplierUpdate,
@@ -41,7 +46,8 @@ __all__ = [
     "ShoppingGroupMember",
     "ShoppingList",
     "ShoppingListItem",
-    "ShoppingPrice",
+    "ShoppingProduct",      # AGGIUNTO
+    "InventoryBatch",       # MODIFICATO: rimpiazza ShoppingPrice
     "ShoppingSupplier",
     "ShoppingGroupCreate",
     "ShoppingGroupMemberCreate",
@@ -57,9 +63,9 @@ __all__ = [
     "ShoppingListItemUpdate",
     "ShoppingListResponse",
     "ShoppingListUpdate",
-    "ShoppingPriceCreate",
-    "ShoppingPriceResponse",
-    "ShoppingPriceUpdate",
+    "InventoryBatchCreate",
+    "InventoryBatchUpdate",
+    "InventoryBatchResponse",
     "ShoppingSupplierCreate",
     "ShoppingSupplierResponse",
     "ShoppingSupplierUpdate",

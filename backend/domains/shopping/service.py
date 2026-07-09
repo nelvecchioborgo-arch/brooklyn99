@@ -1,5 +1,6 @@
-"""Service del dominio Shopping — regole di business per gruppi, liste, prodotti, articoli, fornitori e prezzi."""
-from datetime import datetime, timezone
+"""Service del dominio Shopping — regole di business per gruppi, liste, prodotti, articoli, fornitori e inventario."""
+
+from datetime import date, datetime, timezone
 from typing import List, Optional
 
 from fastapi import HTTPException
@@ -12,7 +13,7 @@ from backend.domains.shopping.models import (
     ShoppingGroupMember,
     ShoppingList,
     ShoppingListItem,
-    ShoppingPrice,
+    InventoryBatch,
     ShoppingProduct,
     ShoppingSupplier,
 )
@@ -30,29 +31,12 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _today() -> date:
+    return date.today()
+
+
 def _normalize_name(value: str) -> str:
     return value.strip().lower()
-
-
-def _get_or_create_product(db: Session, current_user: User, product_name: str) -> ShoppingProduct:
-    normalized_name = _normalize_name(product_name)
-    db_product = repo.get_product_by_name_normalized(db, normalized_name)
-
-    if db_product:
-        return db_product
-
-    now = _now()
-    db_product = ShoppingProduct(
-        name_normalized=normalized_name,
-        created_by_user_id=current_user.id,
-        updated_by_user_id=current_user.id,
-        created_at=now,
-        updated_at=now,
-    )
-    repo.add(db, db_product)
-    repo.commit(db)
-    repo.refresh(db, db_product)
-    return db_product
 
 
 # ------------------------------------------------------------------ Groups
@@ -60,7 +44,11 @@ def list_groups(db: Session, current_user: User) -> List[ShoppingGroup]:
     return repo.list_groups(db, current_user.id)
 
 
-def create_group(db: Session, current_user: User, group_in: schemas.ShoppingGroupCreate) -> ShoppingGroup:
+def create_group(
+    db: Session,
+    current_user: User,
+    group_in: schemas.ShoppingGroupCreate,
+) -> ShoppingGroup:
     default_status_id = repo.active_group_status_id(db)
     if default_status_id is None:
         raise HTTPException(status_code=500, detail="ConfigCode group_status.active mancante")
@@ -77,7 +65,12 @@ def create_group(db: Session, current_user: User, group_in: schemas.ShoppingGrou
     return repo.create_group(db, db_group)
 
 
-def update_group(db: Session, current_user: User, group_id: int, group_in: schemas.ShoppingGroupUpdate) -> ShoppingGroup:
+def update_group(
+    db: Session,
+    current_user: User,
+    group_id: int,
+    group_in: schemas.ShoppingGroupUpdate,
+) -> ShoppingGroup:
     db_group = repo.get_group_owned(db, group_id, current_user.id)
     if not db_group:
         raise HTTPException(status_code=404, detail=_GROUP_NOT_FOUND)
@@ -104,7 +97,12 @@ def list_members(db: Session, current_user: User, group_id: int) -> List[Shoppin
     return repo.list_members(db, group_id)
 
 
-def add_member(db: Session, current_user: User, group_id: int, member_in: schemas.ShoppingGroupMemberCreate) -> ShoppingGroupMember:
+def add_member(
+    db: Session,
+    current_user: User,
+    group_id: int,
+    member_in: schemas.ShoppingGroupMemberCreate,
+) -> ShoppingGroupMember:
     db_group = repo.get_group_owned(db, group_id, current_user.id)
     if not db_group:
         raise HTTPException(status_code=404, detail=_GROUP_NOT_FOUND)
@@ -125,7 +123,12 @@ def add_member(db: Session, current_user: User, group_id: int, member_in: schema
     return repo.add_member(db, db_member)
 
 
-def invite_member(db: Session, current_user: User, group_id: int, invite_in: schemas.ShoppingGroupMemberInvite) -> ShoppingGroupMember:
+def invite_member(
+    db: Session,
+    current_user: User,
+    group_id: int,
+    invite_in: schemas.ShoppingGroupMemberInvite,
+) -> ShoppingGroupMember:
     db_group = repo.get_group_owned(db, group_id, current_user.id)
     if not db_group:
         raise HTTPException(status_code=404, detail=_GROUP_NOT_FOUND)
@@ -154,7 +157,13 @@ def invite_member(db: Session, current_user: User, group_id: int, invite_in: sch
     return repo.add_member(db, db_member)
 
 
-def update_member_role(db: Session, current_user: User, group_id: int, user_id: int, role_in: schemas.ShoppingGroupMemberRoleUpdate) -> ShoppingGroupMember:
+def update_member_role(
+    db: Session,
+    current_user: User,
+    group_id: int,
+    user_id: int,
+    role_in: schemas.ShoppingGroupMemberRoleUpdate,
+) -> ShoppingGroupMember:
     db_group = repo.get_group_owned(db, group_id, current_user.id)
     if not db_group:
         raise HTTPException(status_code=404, detail=_GROUP_NOT_FOUND)
@@ -182,7 +191,10 @@ def remove_member(db: Session, current_user: User, group_id: int, user_id: int) 
         raise HTTPException(status_code=404, detail=_MEMBER_NOT_FOUND)
 
     if db_member.user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="Non puoi rimuovere te stesso. Trasferisci la proprietà o elimina il gruppo.")
+        raise HTTPException(
+            status_code=400,
+            detail="Non puoi rimuovere te stesso. Trasferisci la proprietà o elimina il gruppo.",
+        )
 
     repo.remove_member(db, db_member)
 
@@ -210,7 +222,12 @@ def create_list(db: Session, current_user: User, list_in: schemas.ShoppingListCr
     return db_list
 
 
-def update_list(db: Session, current_user: User, list_id: int, list_in: schemas.ShoppingListUpdate) -> ShoppingList:
+def update_list(
+    db: Session,
+    current_user: User,
+    list_id: int,
+    list_in: schemas.ShoppingListUpdate,
+) -> ShoppingList:
     db_list = repo.get_list_owned(db, list_id, current_user.id)
     if not db_list:
         raise HTTPException(status_code=404, detail=_LIST_NOT_FOUND)
@@ -241,12 +258,18 @@ def list_items(
     return repo.list_items(db, current_user.id, shopping_list_id, is_purchased)
 
 
-def create_item(db: Session, current_user: User, item_in: schemas.ShoppingListItemCreate) -> ShoppingListItem:
+def create_item(
+    db: Session,
+    current_user: User,
+    item_in: schemas.ShoppingListItemCreate,
+) -> ShoppingListItem:
     db_list = repo.get_list_owned(db, item_in.shopping_list_id, current_user.id)
     if not db_list:
         raise HTTPException(status_code=404, detail=_LIST_NOT_FOUND)
 
-    db_product = _get_or_create_product(db, current_user, item_in.product_name)
+    db_product = repo.get_product(db, item_in.product_id)
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Prodotto non trovato")
 
     now = _now()
     db_item = ShoppingListItem(
@@ -267,16 +290,22 @@ def create_item(db: Session, current_user: User, item_in: schemas.ShoppingListIt
     return db_item
 
 
-def update_item(db: Session, current_user: User, item_id: int, item_in: schemas.ShoppingListItemUpdate) -> ShoppingListItem:
+def update_item(
+    db: Session,
+    current_user: User,
+    item_id: int,
+    item_in: schemas.ShoppingListItemUpdate,
+) -> ShoppingListItem:
     db_item = repo.get_item_owned(db, item_id, current_user.id)
     if not db_item:
         raise HTTPException(status_code=404, detail=_ITEM_NOT_FOUND)
 
     update_data = item_in.model_dump(exclude_unset=True)
 
-    if "product_name" in update_data and update_data["product_name"]:
-        db_product = _get_or_create_product(db, current_user, update_data.pop("product_name"))
-        db_item.product_id = db_product.id
+    if "product_id" in update_data and update_data["product_id"] is not None:
+        db_product = repo.get_product(db, update_data["product_id"])
+        if not db_product:
+            raise HTTPException(status_code=404, detail="Prodotto non trovato")
 
     for field, value in update_data.items():
         setattr(db_item, field, value)
@@ -309,7 +338,11 @@ def list_suppliers(
     return suppliers[:limit]
 
 
-def create_supplier(db: Session, current_user: User, supplier_in: schemas.ShoppingSupplierCreate) -> ShoppingSupplier:
+def create_supplier(
+    db: Session,
+    current_user: User,
+    supplier_in: schemas.ShoppingSupplierCreate,
+) -> ShoppingSupplier:
     if repo.find_supplier_by_name(db, supplier_in.name):
         raise HTTPException(status_code=400, detail="Esiste già un fornitore con questo nome.")
 
@@ -320,7 +353,7 @@ def create_supplier(db: Session, current_user: User, supplier_in: schemas.Shoppi
     now = _now()
     db_supplier = ShoppingSupplier(
         name=supplier_in.name,
-        name_normalized=supplier_in.name.strip().lower(),
+        name_normalized=_normalize_name(supplier_in.name),
         status_id=supplier_in.status_id or default_status_id,
         created_by_user_id=current_user.id,
         updated_by_user_id=current_user.id,
@@ -333,7 +366,12 @@ def create_supplier(db: Session, current_user: User, supplier_in: schemas.Shoppi
     return db_supplier
 
 
-def update_supplier(db: Session, current_user: User, supplier_id: int, supplier_in: schemas.ShoppingSupplierUpdate) -> ShoppingSupplier:
+def update_supplier(
+    db: Session,
+    current_user: User,
+    supplier_id: int,
+    supplier_in: schemas.ShoppingSupplierUpdate,
+) -> ShoppingSupplier:
     db_supplier = repo.get_supplier(db, supplier_id)
     if not db_supplier:
         raise HTTPException(status_code=404, detail="Fornitore non trovato")
@@ -344,7 +382,7 @@ def update_supplier(db: Session, current_user: User, supplier_id: int, supplier_
         existing = repo.find_supplier_by_name(db, update_data["name"])
         if existing and existing.id != supplier_id:
             raise HTTPException(status_code=400, detail="Esiste già un fornitore con questo nome.")
-        update_data["name_normalized"] = update_data["name"].strip().lower()
+        update_data["name_normalized"] = _normalize_name(update_data["name"])
 
     for field, value in update_data.items():
         setattr(db_supplier, field, value)
@@ -362,79 +400,123 @@ def delete_supplier(db: Session, current_user: User, supplier_id: int) -> None:
     if not db_supplier:
         raise HTTPException(status_code=404, detail="Fornitore non trovato")
 
-    if repo.supplier_has_prices(db, supplier_id):
+    if repo.supplier_has_batches(db, supplier_id):
         raise HTTPException(
             status_code=400,
-            detail="Impossibile eliminare il fornitore: ha prezzi associati.",
+            detail="Impossibile eliminare il fornitore: ha acquisti/lotti associati.",
         )
     repo.delete(db, db_supplier)
 
 
-# ------------------------------------------------------------------ Prices
-def add_price(db: Session, current_user: User, item_id: int, price_in: schemas.ShoppingPriceCreate) -> ShoppingPrice:
+# ------------------------------------------------------------------ Inventory Batches
+def add_inventory_batch(
+    db: Session,
+    current_user: User,
+    item_id: int,
+    batch_in: schemas.InventoryBatchCreate,
+) -> InventoryBatch:
     db_item = repo.get_item_owned(db, item_id, current_user.id)
     if not db_item:
         raise HTTPException(status_code=404, detail=_ITEM_NOT_FOUND)
 
-    if price_in.supplier_id is not None and not repo.get_supplier(db, price_in.supplier_id):
+    if batch_in.product_id != db_item.product_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Il product_id del lotto non corrisponde al prodotto dell'articolo di lista.",
+        )
+
+    if batch_in.supplier_id is not None and not repo.get_supplier(db, batch_in.supplier_id):
         raise HTTPException(status_code=404, detail="Fornitore non trovato")
 
-    purchased_by_user_id = price_in.purchased_by_user_id or current_user.id
-    now = _now()
+    purchased_by_user_id = batch_in.purchased_by_user_id or current_user.id
+    today = _today()
 
-    db_price = ShoppingPrice(
-        shopping_list_id=db_item.shopping_list_id,
-        shopping_list_item_id=item_id,
+    db_batch = InventoryBatch(
+        list_item_id=item_id,
         product_id=db_item.product_id,
-        supplier_id=price_in.supplier_id,
-        purchase_date=price_in.purchase_date or now.date(),
-        expiration_date=price_in.expiration_date,
-        price=price_in.price,
-        currency_id=price_in.currency_id,
-        offer_flag_id=price_in.offer_flag_id,
+        supplier_id=batch_in.supplier_id,
+        purchase_date=batch_in.purchase_date,
+        expiration_date=batch_in.expiration_date,
+        quantity_purchased=batch_in.quantity_purchased,
+        purchase_price=batch_in.purchase_price,
+        is_on_sale=batch_in.is_on_sale,
         purchased_by_user_id=purchased_by_user_id,
         created_by_user_id=current_user.id,
         updated_by_user_id=current_user.id,
-        created_at=now,
-        updated_at=now,
+        created_at=today,
+        updated_at=today,
     )
-    repo.add(db, db_price)
+    repo.add(db, db_batch)
 
     db_item.is_purchased = True
-    db_item.updated_at = now
+    db_item.updated_at = _now()
     db_item.updated_by_user_id = current_user.id
 
     repo.commit(db)
-    repo.refresh(db, db_price)
-    return db_price
+    repo.refresh(db, db_batch)
+    return db_batch
 
 
-def update_price(db: Session, current_user: User, price_id: int, price_in: schemas.ShoppingPriceUpdate) -> ShoppingPrice:
-    db_price = repo.get_price(db, price_id)
-    if not db_price:
-        raise HTTPException(status_code=404, detail="Prezzo non trovato")
+def update_inventory_batch(
+    db: Session,
+    current_user: User,
+    batch_id: int,
+    batch_in: schemas.InventoryBatchUpdate,
+) -> InventoryBatch:
+    db_batch = repo.get_batch(db, batch_id)
+    if not db_batch:
+        raise HTTPException(status_code=404, detail="Lotto/Acquisto non trovato")
 
-    update_data = price_in.model_dump(exclude_unset=True)
+    update_data = batch_in.model_dump(exclude_unset=True)
 
-    if update_data.get("supplier_id") is not None and not repo.get_supplier(db, update_data["supplier_id"]):
-        raise HTTPException(status_code=404, detail="Nuovo fornitore non trovato")
+    if "supplier_id" in update_data and update_data["supplier_id"] is not None:
+        if not repo.get_supplier(db, update_data["supplier_id"]):
+            raise HTTPException(status_code=404, detail="Nuovo fornitore non trovato")
+
+    if "product_id" in update_data and update_data["product_id"] is not None:
+        if update_data["product_id"] != db_batch.product_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Il product_id del lotto non può essere modificato.",
+            )
+
+    if "list_item_id" in update_data and update_data["list_item_id"] is not None:
+        if update_data["list_item_id"] != db_batch.list_item_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Il list_item_id del lotto non può essere modificato.",
+            )
 
     for field, value in update_data.items():
-        setattr(db_price, field, value)
+        setattr(db_batch, field, value)
 
-    db_price.updated_at = _now()
-    db_price.updated_by_user_id = current_user.id
+    db_batch.updated_at = _today()
+    db_batch.updated_by_user_id = current_user.id
 
     repo.commit(db)
-    repo.refresh(db, db_price)
-    return db_price
+    repo.refresh(db, db_batch)
+    return db_batch
 
 
-def delete_price(db: Session, current_user: User, price_id: int) -> None:
-    db_price = repo.get_price(db, price_id)
-    if not db_price:
-        raise HTTPException(status_code=404, detail="Prezzo non trovato")
-    repo.delete(db, db_price)
+def delete_inventory_batch(db: Session, current_user: User, batch_id: int) -> None:
+    db_batch = repo.get_batch(db, batch_id)
+    if not db_batch:
+        raise HTTPException(status_code=404, detail="Lotto/Acquisto non trovato")
+
+    db_batch.deleted_at = _today()
+    db_batch.deleted_by_user_id = current_user.id
+    db_batch.updated_at = _today()
+    db_batch.updated_by_user_id = current_user.id
+
+    repo.commit(db)
+
+    if db_batch.list_item_id is not None and not repo.item_has_active_batches(db, db_batch.list_item_id):
+        db_item = repo.get_item(db, db_batch.list_item_id)
+        if db_item:
+            db_item.is_purchased = False
+            db_item.updated_at = _now()
+            db_item.updated_by_user_id = current_user.id
+            repo.commit(db)
 
 
 # ------------------------------------------------------------------ Products

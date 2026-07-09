@@ -37,7 +37,8 @@ from backend.domains.shopping.models import (  # noqa: F401
     ShoppingGroupMember,
     ShoppingList,
     ShoppingListItem,
-    ShoppingPrice,
+    InventoryBatch,
+    ShoppingProduct,
     ShoppingSupplier,
 )
 from backend.domains.tasks.models import PrioritaEnum, Task  # noqa: F401
