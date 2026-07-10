@@ -1,234 +1,153 @@
-// src/types/shopping.ts
-// Tipi condivisi per il dominio Shopping (allineati ai backend schemas)
+// frontend/src/types/shopping.ts
 
-export type ApiDateString = string;
-export type ApiDateTimeString = string;
-export type ApiDecimal = string | number;
+export type ShoppingViewMode = 'items' | 'bulk-purchase';
+export type ShoppingFilterStatus = 'tutti' | 'aperti' | 'completati';
 
-// ── Catalogs / Options ──
-export interface CatalogOption {
+export interface ConfigOption {
   id: number;
-  code_value: string;
-  code_name: string;
-  description?: string | null;
-  sort_order?: number | null;
+  codeType: string;
+  codeValue: string;
+  codeName: string;
+  sortOrder?: number | null;
+  active: boolean;
 }
 
-export const SHOPPING_CODE_TYPES = {
-  groupRole: 'shopping_group_role',
-  listVisibility: 'shopping_list_visibility',
-  listStatus: 'shopping_list_status',
-  itemStatus: 'shopping_item_status',
-  unit: 'shopping_unit',
-  currency: 'currency',
-  offerFlag: 'offer_flag',
-  supplierStatus: 'supplier_status',
-} as const;
-
-// ── Constants ──
-export const SHOPPING_ROLES = ['reader', 'editor', 'admin', 'owner'] as const;
-export type ShoppingRole = (typeof SHOPPING_ROLES)[number];
-
-// ── Groups ──
-export interface ShoppingGroup {
+export interface ShoppingGroupSummary {
   id: number;
-  owner_id: number;
   name: string;
   description?: string | null;
-  status_id: number;
-  created_at: ApiDateTimeString;
-  updated_at?: ApiDateTimeString | null;
-  archived_at?: ApiDateTimeString | null;
-  deleted_at?: ApiDateTimeString | null;
+  statusId: number;
+  statusCode?: string | null;
 }
 
-export interface ShoppingGroupMember {
+export interface ShoppingListSummary {
   id: number;
-  group_id: number;
-  user_id: number;
-  role_id: number;
-  added_by_user_id?: number | null;
-  created_at: ApiDateTimeString;
-  updated_at?: ApiDateTimeString | null;
-  removed_at?: ApiDateTimeString | null;
+  userId: number;
+  groupId?: number | null;
+  visibilityId: number;
+  visibilityCode?: string | null;
+  statusId: number;
+  statusCode?: string | null;
+  name: string;
+  description?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+
+  group?: ShoppingGroupSummary | null;
+
+  totalItemsCount: number;
+  openItemsCount: number;
+  purchasedItemsCount: number;
+
+  canEdit: boolean;
+  canArchive: boolean;
+  canDelete: boolean;
 }
 
-// ── Prices ──
-export interface ShoppingPrice {
+export interface ShoppingSupplierOption {
   id: number;
-  shopping_list_id: number;
-  shopping_list_item_id: number;
-  product_name_original?: string | null;
-  product_name_normalized?: string | null;
-  supplier_id?: number | null;
-  purchase_date: ApiDateString;
-  price: ApiDecimal;
-  currency_id?: number | null;
-  offer_flag_id?: number | null;
-  created_by_user_id: number;
-  updated_by_user_id?: number | null;
-  created_at: ApiDateTimeString;
-  updated_at?: ApiDateTimeString | null;
-  deleted_at?: ApiDateTimeString | null;
+  name: string;
+  nameNormalized: string;
+  statusId: number;
+  statusCode?: string | null;
 }
 
-// ── Items ──
+export interface ShoppingProductOption {
+  id: number;
+  nameNormalized: string;
+  displayName?: string | null;
+}
+
 export interface ShoppingListItem {
   id: number;
-  shopping_list_id: number;
-  name_original: string;
-  name_normalized: string;
-  quantity?: ApiDecimal | null;
-  unit_id?: number | null;
+  shoppingListId: number;
+  productId: number;
+
+  nameOriginal: string;
+  nameNormalized: string;
+
+  quantity?: number | null;
+  unitId?: number | null;
+  unitLabel?: string | null;
+
   notes?: string | null;
-  status_id: number;
-  is_purchased: boolean;
-  purchased_at?: ApiDateTimeString | null;
-  purchased_by_user_id?: number | null;
-  created_by_user_id: number;
-  updated_by_user_id?: number | null;
-  created_at: ApiDateTimeString;
-  updated_at?: ApiDateTimeString | null;
-  deleted_at?: ApiDateTimeString | null;
-  prices: ShoppingPrice[];
+
+  statusId: number;
+  statusCode?: string | null;
+
+  isPurchased: boolean;
+  purchasedAt?: string | null;
+  purchasedByUserId?: number | null;
+  purchasedByUsername?: string | null;
+
+  createdByUserId: number;
+  createdByUsername?: string | null;
+  updatedByUserId?: number | null;
+
+  createdAt: string;
+  updatedAt?: string | null;
+
+  canEdit: boolean;
+  canTogglePurchased: boolean;
+  canDelete: boolean;
 }
 
-// ── Lists ──
-export interface ShoppingList {
-  id: number;
-  owner_id: number;
-  group_id?: number | null;
-  visibility_id: number;
-  status_id: number;
-  name: string;
-  description?: string | null;
-  created_at: ApiDateTimeString;
-  updated_at?: ApiDateTimeString | null;
-  closed_at?: ApiDateTimeString | null;
-  archived_at?: ApiDateTimeString | null;
-  deleted_at?: ApiDateTimeString | null;
+export interface ShoppingListDetail {
+  list: ShoppingListSummary;
   items: ShoppingListItem[];
 }
 
-// ── Suppliers ──
-export interface ShoppingSupplier {
+export interface ShoppingPriceCreatePayload {
+  shoppingListId: number;
+  shoppingListItemId: number;
+  productId: number;
+  supplierId?: number | null;
+  purchaseDate: string;
+  price: number;
+  currencyId?: number | null;
+  offerFlagId?: number | null;
+  expirationDate?: string | null;
+}
+
+export interface InventoryBatchRow {
   id: number;
-  name: string;
-  name_normalized: string;
-  status_id: number;
-  created_by_user_id: number;
-  updated_by_user_id?: number | null;
-  created_at: ApiDateTimeString;
-  updated_at?: ApiDateTimeString | null;
-  deleted_at?: ApiDateTimeString | null;
+  productId: number;
+  listItemId?: number | null;
+  purchaseDate: string;
+  quantityPurchased: number;
+  purchasePrice: number;
+  supplierId?: number | null;
+  supplierName?: string | null;
+  isOnSale: boolean;
+  expirationDate?: string | null;
+  purchasedByUserId?: number | null;
+  purchasedByUsername?: string | null;
 }
 
-// ── UI Form States ──
-export interface ListFormState {
-  group_id: string;
-  visibility_id: string;
-  status_id: string;
-  name: string;
-  description: string;
+export interface ShoppingConfigBundle {
+  visibilityOptions: ConfigOption[];
+  listStatusOptions: ConfigOption[];
+  itemStatusOptions: ConfigOption[];
+  unitOptions: ConfigOption[];
+  currencyOptions: ConfigOption[];
+  offerFlagOptions: ConfigOption[];
+  groupRoleOptions: ConfigOption[];
 }
 
-export interface ItemFormState {
-  shopping_list_id: string;
-  name_original: string;
-  quantity: string;
-  unit_id: string;
-  notes: string;
-  status_id: string;
-}
+export interface UseShoppingDataResult {
+  lists: ShoppingListSummary[];
+  activeListId: number | null;
+  activeList: ShoppingListSummary | null;
+  items: ShoppingListItem[];
 
-export interface SupplierFormState {
-  name: string;
-  status_id: string;
-}
+  suppliers: ShoppingSupplierOption[];
+  products: ShoppingProductOption[];
+  config: ShoppingConfigBundle | null;
 
-export interface PurchaseFormState {
-  supplier_id: string;
-  price: string;
-  purchase_date: string;
-  currency_id: string;
-  offer_flag_id: string;
-}
+  listsLoading: boolean;
+  itemsLoading: boolean;
 
-export interface InviteFormState {
-  username: string;
-  email: string;
-  role_code: ShoppingRole;
-}
-
-// ── Backend-shaped payload types ──
-export interface ShoppingGroupCreateInput {
-  name: string;
-  description?: string;
-  status_id?: string;
-}
-
-export interface ShoppingGroupUpdateInput {
-  name?: string;
-  description?: string;
-  status_id?: string;
-}
-
-export interface ShoppingListCreateInput {
-  group_id?: string;
-  visibility_id: string;
-  status_id?: string;
-  name: string;
-  description?: string;
-}
-
-export interface ShoppingListUpdateInput {
-  name?: string;
-  description?: string;
-  visibility_id?: string;
-  status_id?: string;
-  group_id?: string;
-}
-
-export interface ShoppingListItemCreateInput {
-  shopping_list_id: string;
-  name_original: string;
-  quantity?: string;
-  unit_id?: string;
-  notes?: string;
-  status_id?: string;
-}
-
-export interface ShoppingListItemUpdateInput {
-  name_original?: string;
-  quantity?: string;
-  unit_id?: string;
-  notes?: string;
-  status_id?: string;
-  is_purchased?: boolean;
-}
-
-export interface ShoppingPriceCreateInput {
-  supplier_id?: string;
-  purchase_date?: string;
-  price: string;
-  currency_id?: string;
-  offer_flag_id?: string;
-}
-
-export interface ShoppingPriceUpdateInput {
-  supplier_id?: string;
-  purchase_date?: string;
-  price?: string;
-  currency_id?: string;
-  offer_flag_id?: string;
-}
-
-export interface ShoppingSupplierCreateInput {
-  name: string;
-  status_id?: string;
-}
-
-export interface ShoppingSupplierUpdateInput {
-  name?: string;
-  status_id?: string;
+  setActiveListId: (listId: number | null) => void;
+  refreshLists: () => Promise<void>;
+  refreshItems: (listId: number) => Promise<void>;
 }

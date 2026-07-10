@@ -1,13 +1,14 @@
+// src/components/shared/shopping/ShoppingQuickAddBar.tsx
 import React from 'react';
-import type { CatalogOption } from '../../../types/shopping';
+import type { ConfigOption } from '../../../types/shopping';
 import {
   shoppingButtonPrimaryClass,
   shoppingInputClass,
 } from './shoppingUi';
 
 interface ShoppingQuickAddBarProps {
-  activeListId: string;
-  unitOptions: CatalogOption[];
+  activeListId: number | null;
+  unitOptions: ConfigOption[];
   quickName: string;
   quickQuantity: string;
   quickUnitId: string;
@@ -15,7 +16,7 @@ interface ShoppingQuickAddBarProps {
   onQuickNameChange: (value: string) => void;
   onQuickQuantityChange: (value: string) => void;
   onQuickUnitChange: (value: string) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 }
 
 const ShoppingQuickAddBar: React.FC<ShoppingQuickAddBarProps> = ({
@@ -30,25 +31,26 @@ const ShoppingQuickAddBar: React.FC<ShoppingQuickAddBarProps> = ({
   onQuickUnitChange,
   onSubmit,
 }) => {
-  const disabled = !activeListId || !quickName.trim() || loading;
+  const hasActiveList = activeListId != null;
+  const disabled = !hasActiveList || !quickName.trim() || loading;
 
   return (
     <form
       onSubmit={onSubmit}
-      className="shrink-0 rounded-2xl border border-gray-200 bg-gray-50 p-2"
+      className="shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-2"
     >
       <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_110px_150px_auto]">
         <input
           type="text"
           className={shoppingInputClass}
           placeholder={
-            activeListId
+            hasActiveList
               ? 'Aggiungi rapidamente un articolo...'
               : 'Seleziona prima una lista'
           }
           value={quickName}
           onChange={(e) => onQuickNameChange(e.target.value)}
-          disabled={!activeListId || loading}
+          disabled={!hasActiveList || loading}
         />
 
         <input
@@ -59,19 +61,19 @@ const ShoppingQuickAddBar: React.FC<ShoppingQuickAddBarProps> = ({
           placeholder="Qtà"
           value={quickQuantity}
           onChange={(e) => onQuickQuantityChange(e.target.value)}
-          disabled={!activeListId || loading}
+          disabled={!hasActiveList || loading}
         />
 
         <select
           className={shoppingInputClass}
           value={quickUnitId}
           onChange={(e) => onQuickUnitChange(e.target.value)}
-          disabled={!activeListId || loading}
+          disabled={!hasActiveList || loading}
         >
           <option value="">Unità</option>
           {unitOptions.map((option) => (
-            <option key={option.code_value} value={String(option.id)}>
-              {option.code_name}
+            <option key={option.id} value={String(option.id)}>
+              {option.codeName}
             </option>
           ))}
         </select>

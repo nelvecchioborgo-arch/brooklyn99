@@ -1,18 +1,22 @@
 // src/components/shared/shopping/ShoppingBulkPurchasePanel.tsx
-import React, { useMemo, useState } from 'react';
-import { useShoppingMutations } from '../../../hooks/useShoppingMutations';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useShoppingMutations } from '../../../hooks/shopping/useShoppingMutations';
 import type {
-  CatalogOption,
-  PurchaseFormState,
+  ConfigOption,
   ShoppingListItem,
-  ShoppingSupplier,
+  ShoppingListSummary,
+  ShoppingSupplierOption,
 } from '../../../types/shopping';
 import {
   shoppingButtonPrimaryClass,
   shoppingCardClass,
   shoppingInputClass,
 } from './shoppingUi';
-import { emptyPurchaseForm, getEurCurrencyId, renderCatalogOptions } from './shoppingItems.utils';
+import {
+  emptyPurchaseForm,
+  getEurCurrencyId,
+} from './shoppingItems.utils';
+import type { PurchaseFormState } from './shoppingItems.utils';
 
 interface BulkPurchaseRowState {
   item: ShoppingListItem;
@@ -21,13 +25,22 @@ interface BulkPurchaseRowState {
 }
 
 interface ShoppingBulkPurchasePanelProps {
+  activeList: ShoppingListSummary;
   items: ShoppingListItem[];
-  suppliers: ShoppingSupplier[];
-  currencyOptions: CatalogOption[];
-  offerFlagOptions: CatalogOption[];
+  suppliers: ShoppingSupplierOption[];
+  currencyOptions: ConfigOption[];
+  offerFlagOptions: ConfigOption[];
 }
 
+const renderConfigOptions = (options: ConfigOption[]) =>
+  options.map((option) => (
+    <option key={option.id} value={String(option.id)}>
+      {option.codeName}
+    </option>
+  ));
+
 const ShoppingBulkPurchasePanel: React.FC<ShoppingBulkPurchasePanelProps> = ({
+  activeList,
   items,
   suppliers,
   currencyOptions,
@@ -37,29 +50,39 @@ const ShoppingBulkPurchasePanel: React.FC<ShoppingBulkPurchasePanelProps> = ({
 
   const eurCurrencyId = useMemo(
     () => getEurCurrencyId(currencyOptions),
-    [currencyOptions],
+    [currencyOptions]
   );
 
   const openItems = useMemo(
-    () => items.filter((item) => !item.is_purchased),
-    [items],
+    () => items.filter((item) => !item.isPurchased),
+    [items]
   );
 
-  const [rows, setRows] = useState<BulkPurchaseRowState[]>(
-    openItems.map((item) => ({
-      item,
-      form: emptyPurchaseForm(eurCurrencyId),
-      saving: false,
-    })),
-  );
+  const [rows, setRows] = useState<BulkPurchaseRowState[]>([]);
 
-  const updateRowForm = (itemId: number, updater: (prev: PurchaseFormState) => PurchaseFormState) => {
+  useEffect(() => {
+    setRows(
+      openItems.map((item) => ({
+        item,
+        form: {
+          ...emptyPurchaseForm(eurCurrencyId),
+          purchaseDate: new Date().toISOString().slice(0, 10),
+        },
+        saving: false,
+      }))
+    );
+  }, [openItems, eurCurrencyId]);
+
+  const updateRowForm = (
+    itemId: number,
+    updater: (prev: PurchaseFormState) => PurchaseFormState
+  ) => {
     setRows((prev) =>
       prev.map((row) =>
         row.item.id === itemId
           ? { ...row, form: updater(row.form) }
-          : row,
-      ),
+          : row
+      )
     );
   };
 
@@ -67,90 +90,83 @@ const ShoppingBulkPurchasePanel: React.FC<ShoppingBulkPurchasePanelProps> = ({
     const row = rows.find((r) => r.item.id === itemId);
     if (!row) return;
 
-    const { form } = row;
-    if (!form.price || !form.purchase_date || !form.currency_id) {
-      // puoi eventualmente aggiungere un feedback di validazione locale
+    const { item, form } = row;
+    if (!form.price || !form.purchaseDate || !form.currencyId) {
       return;
     }
 
     setRows((prev) =>
       prev.map((r) =>
-        r.item.id === itemId ? { ...r, saving: true } : r,
-      ),
+        r.item.id === itemId ? { ...r, saving: true } : r
+      )
     );
 
     try {
       await mutations.addPrice({
-        itemId,
-        form: {
-          supplier_id: form.supplier_id,
-          price: form.price,
-          purchase_date: form.purchase_date,
-          currency_id: form.currency_id,
-          offer_flag_id: form.offer_flag_id,
-        },
+        shoppingListId: activeList.id,
+        shoppingListItemId: item.id,
+        productId: item.productId,
+        supplierId: form.supplierId ? Number(form.supplierId) : undefined,
+        purchaseDate: form.purchaseDate,
+        price: Number(form.price),
+        currencyId: form.currencyId ? Number(form.currencyId) : undefined,
+        offerFlagId: form.offerFlagId ? Number(form.offerFlagId) : undefined,
       });
-      // dopo il salvataggio puoi opzionalmente rimuovere la riga o resettare il form
-      setRows((prev) =>
-        prev.map((r) =>
-          r.item.id === itemId
-            ? { ...r, form: emptyPurchaseForm(eurCurrencyId), saving: false }
-            : r,
-        ),
-      );
+
+      setRows((prev) => prev.filter((r) => r.item.id !== itemId));
     } finally {
       setRows((prev) =>
         prev.map((r) =>
-          r.item.id === itemId ? { ...r, saving: false } : r,
-        ),
+          r.item.id === itemId ? { ...r, saving: false } : r
+        )
       );
     }
   };
 
   if (openItems.length === 0) {
     return (
-      <div className={`${shoppingCardClass} p-4 text-xs text-gray-500`}>
+      <div className={`${shoppingCardClass} p-4 text-sm text-slate-500`}>
         Nessun articolo aperto da acquistare.
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-gray-700">
-          Acquisto multiplo
-        </h2>
-        <p className="text-xs text-gray-400">
-          {openItems.length} articoli aperti
-        </p>
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-auto p-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+            Acquisto multiplo
+          </h2>
+          <p className="text-xs text-slate-400">
+            {openItems.length} articoli aperti nella lista {activeList.name}
+          </p>
+        </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {rows.map(({ item, form, saving }) => (
           <div
             key={item.id}
-            className={`${shoppingCardClass} flex flex-col gap-2 p-3`}
+            className={`${shoppingCardClass} flex flex-col gap-3 p-4`}
           >
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-gray-800">
-                  {item.name_original}
-                </p>
-                {item.notes && (
-                  <p className="truncate text-xs text-gray-400">{item.notes}</p>
-                )}
-              </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-slate-800">
+                {item.nameOriginal}
+              </p>
+              {item.notes ? (
+                <p className="truncate text-xs text-slate-400">{item.notes}</p>
+              ) : null}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <select
                 className={shoppingInputClass}
-                value={form.supplier_id}
+                value={form.supplierId}
                 onChange={(e) =>
                   updateRowForm(item.id, (prev) => ({
                     ...prev,
-                    supplier_id: e.target.value,
+                    supplierId: e.target.value,
                   }))
                 }
               >
@@ -179,15 +195,15 @@ const ShoppingBulkPurchasePanel: React.FC<ShoppingBulkPurchasePanelProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <input
                 type="date"
                 className={shoppingInputClass}
-                value={form.purchase_date}
+                value={form.purchaseDate}
                 onChange={(e) =>
                   updateRowForm(item.id, (prev) => ({
                     ...prev,
-                    purchase_date: e.target.value,
+                    purchaseDate: e.target.value,
                   }))
                 }
                 required
@@ -195,39 +211,39 @@ const ShoppingBulkPurchasePanel: React.FC<ShoppingBulkPurchasePanelProps> = ({
 
               <select
                 className={shoppingInputClass}
-                value={form.currency_id}
+                value={form.currencyId}
                 onChange={(e) =>
                   updateRowForm(item.id, (prev) => ({
                     ...prev,
-                    currency_id: e.target.value,
+                    currencyId: e.target.value,
                   }))
                 }
               >
                 <option value="">Valuta</option>
-                {renderCatalogOptions(currencyOptions)}
+                {renderConfigOptions(currencyOptions)}
               </select>
             </div>
 
             <select
               className={shoppingInputClass}
-              value={form.offer_flag_id}
+              value={form.offerFlagId}
               onChange={(e) =>
                 updateRowForm(item.id, (prev) => ({
                   ...prev,
-                  offer_flag_id: e.target.value,
+                  offerFlagId: e.target.value,
                 }))
               }
             >
               <option value="">Nessun flag offerta</option>
-              {renderCatalogOptions(offerFlagOptions)}
+              {renderConfigOptions(offerFlagOptions)}
             </select>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end pt-1">
               <button
                 type="button"
                 onClick={() => handleSaveRow(item.id)}
                 disabled={saving}
-                className={`${shoppingButtonPrimaryClass} text-xs disabled:opacity-50`}
+                className={`${shoppingButtonPrimaryClass} disabled:opacity-50`}
               >
                 {saving ? 'Salvataggio...' : 'Registra acquisto'}
               </button>

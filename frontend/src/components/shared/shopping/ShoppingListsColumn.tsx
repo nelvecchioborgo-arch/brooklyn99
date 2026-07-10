@@ -1,13 +1,12 @@
 // src/components/shared/shopping/ShoppingListsColumn.tsx
 import React, { useEffect, useState } from 'react';
-import { useShoppingMutations } from '../../../hooks/useShoppingMutations';
-import { useModal } from '../../../hooks/useModals';
+import { useShoppingMutations } from '@/hooks/shopping/useShoppingMutations';
+import { useModal } from '@/hooks/useModals';
 import type {
-  CatalogOption,
-  ListFormState,
-  ShoppingGroup,
-  ShoppingList,
-} from '../../../types/shopping';
+  ConfigOption,
+  ShoppingGroupSummary,
+  ShoppingListSummary,
+} from '@/types/shopping';
 import {
   shoppingButtonPrimaryClass,
   shoppingButtonSecondaryClass,
@@ -15,30 +14,40 @@ import {
   shoppingInputClass,
 } from './shoppingUi';
 
+interface ListFormState {
+  groupId: string;
+  visibilityId: string;
+  statusId: string;
+  name: string;
+  description: string;
+}
+
 interface ShoppingListsColumnProps {
-  lists: ShoppingList[];
+  lists: ShoppingListSummary[];
   loadingLists: boolean;
-  activeListId: string;
-  setActiveListId: (id: string) => void;
-  groups: ShoppingGroup[];
-  listVisibilityOptions: CatalogOption[];
-  listStatusOptions: CatalogOption[];
+  activeListId: number | null;
+  setActiveListId: (id: number | null) => void;
+  groups: ShoppingGroupSummary[];
+  listVisibilityOptions: ConfigOption[];
+  listStatusOptions: ConfigOption[];
 }
 
 const makeEmptyForm = (
-  listVisibilityOptions: CatalogOption[] = [],
+  listVisibilityOptions: ConfigOption[] = []
 ): ListFormState => ({
-  group_id: '',
-  visibility_id: listVisibilityOptions[0] ? String(listVisibilityOptions[0].id) : '',
-  status_id: '',
+  groupId: '',
+  visibilityId: listVisibilityOptions[0]
+    ? String(listVisibilityOptions[0].id)
+    : '',
+  statusId: '',
   name: '',
   description: '',
 });
 
-const renderCatalogOptions = (options: CatalogOption[]) =>
+const renderConfigOptions = (options: ConfigOption[]) =>
   options.map((option) => (
     <option key={option.id} value={String(option.id)}>
-      {option.code_name}
+      {option.codeName}
     </option>
   ));
 
@@ -53,38 +62,38 @@ const ShoppingListsColumn: React.FC<ShoppingListsColumnProps> = ({
 }) => {
   const mutations = useShoppingMutations();
   const createModal = useModal<null>();
-  const editModal = useModal<ShoppingList>();
+  const editModal = useModal<ShoppingListSummary>();
 
   const [form, setForm] = useState<ListFormState>(() =>
-    makeEmptyForm(listVisibilityOptions),
+    makeEmptyForm(listVisibilityOptions)
   );
   const [editForm, setEditForm] = useState<ListFormState>(() =>
-    makeEmptyForm(listVisibilityOptions),
+    makeEmptyForm(listVisibilityOptions)
   );
 
   useEffect(() => {
     setForm((prev) => {
-      if (prev.visibility_id || listVisibilityOptions.length === 0) {
+      if (prev.visibilityId || listVisibilityOptions.length === 0) {
         return prev;
       }
 
       return {
         ...prev,
-        visibility_id: String(listVisibilityOptions[0].id),
+        visibilityId: String(listVisibilityOptions[0].id),
       };
     });
   }, [listVisibilityOptions]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.visibility_id) return;
+    if (!form.name.trim() || !form.visibilityId) return;
 
     await mutations.createList({
       name: form.name.trim(),
       description: form.description.trim() || undefined,
-      group_id: form.group_id || undefined,
-      visibility_id: form.visibility_id,
-      status_id: form.status_id || undefined,
+      groupId: form.groupId ? Number(form.groupId) : undefined,
+      visibilityId: Number(form.visibilityId),
+      statusId: form.statusId ? Number(form.statusId) : undefined,
     });
 
     setForm(makeEmptyForm(listVisibilityOptions));
@@ -100,30 +109,32 @@ const ShoppingListsColumn: React.FC<ShoppingListsColumnProps> = ({
       data: {
         name: editForm.name.trim(),
         description: editForm.description.trim() || undefined,
-        group_id: editForm.group_id || undefined,
-        visibility_id: editForm.visibility_id || undefined,
-        status_id: editForm.status_id || undefined,
+        groupId: editForm.groupId ? Number(editForm.groupId) : undefined,
+        visibilityId: editForm.visibilityId
+          ? Number(editForm.visibilityId)
+          : undefined,
+        statusId: editForm.statusId ? Number(editForm.statusId) : undefined,
       },
     });
 
     editModal.close();
   };
 
-  const handleDelete = async (list: ShoppingList) => {
+  const handleDelete = async (list: ShoppingListSummary) => {
     if (!window.confirm(`Eliminare la lista "${list.name}"?`)) return;
 
     await mutations.deleteList(list.id);
 
-    if (String(list.id) === activeListId) {
-      setActiveListId('');
+    if (list.id === activeListId) {
+      setActiveListId(null);
     }
   };
 
-  const startEdit = (list: ShoppingList) => {
+  const startEdit = (list: ShoppingListSummary) => {
     setEditForm({
-      group_id: list.group_id == null ? '' : String(list.group_id),
-      visibility_id: String(list.visibility_id),
-      status_id: list.status_id == null ? '' : String(list.status_id),
+      groupId: list.groupId == null ? '' : String(list.groupId),
+      visibilityId: String(list.visibilityId),
+      statusId: list.statusId == null ? '' : String(list.statusId),
       name: list.name,
       description: list.description ?? '',
     });
@@ -132,9 +143,9 @@ const ShoppingListsColumn: React.FC<ShoppingListsColumnProps> = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="shrink-0 flex items-center justify-between">
+      <div className="flex shrink-0 items-center justify-between">
         <h2 className="text-sm font-bold uppercase tracking-wider text-gray-700">
-          Liste Spesa
+          Liste spesa
         </h2>
         <button
           type="button"
@@ -159,32 +170,25 @@ const ShoppingListsColumn: React.FC<ShoppingListsColumnProps> = ({
           <>
             <button
               type="button"
-              className={`${shoppingCardClass} w-full cursor-pointer p-3 text-left transition hover:border-blue-300 ${
-                activeListId === '' ? 'border-blue-400 ring-1 ring-blue-200' : ''
+              className={`${shoppingCardClass} w-full p-3 text-left transition hover:border-blue-300 ${
+                activeListId === null ? 'border-blue-400 ring-1 ring-blue-200' : ''
               }`}
-              onClick={() => setActiveListId('')}
+              onClick={() => setActiveListId(null)}
             >
               <p className="text-sm font-semibold text-gray-700">Tutte le liste</p>
             </button>
 
             {lists.map((list) => {
-              const isActive = activeListId === String(list.id);
+              const isActive = activeListId === list.id;
 
               return (
-                <div
+                <button
                   key={list.id}
-                  role="button"
-                  tabIndex={0}
-                  className={`${shoppingCardClass} w-full cursor-pointer p-3 text-left transition hover:border-blue-300 ${
+                  type="button"
+                  className={`${shoppingCardClass} w-full p-3 text-left transition hover:border-blue-300 ${
                     isActive ? 'border-blue-400 ring-1 ring-blue-200' : ''
                   }`}
-                  onClick={() => setActiveListId(String(list.id))}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setActiveListId(String(list.id));
-                    }
-                  }}
+                  onClick={() => setActiveListId(list.id)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="min-w-0 flex-1">
@@ -192,54 +196,60 @@ const ShoppingListsColumn: React.FC<ShoppingListsColumnProps> = ({
                         {list.name}
                       </p>
 
-                      {list.description && (
+                      {list.description ? (
                         <p className="truncate text-xs text-gray-500">
                           {list.description}
                         </p>
-                      )}
+                      ) : null}
 
-                      {list.group_id && (
+                      {list.groupId ? (
                         <span className="text-xs text-blue-500">Gruppo</span>
-                      )}
+                      ) : null}
                     </div>
 
                     <div className="ml-2 flex shrink-0 items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startEdit(list);
-                        }}
-                        className="text-xs text-gray-400 hover:text-blue-500"
-                        aria-label={`Modifica lista ${list.name}`}
-                      >
-                        ✎
-                      </button>
+                      {list.canEdit ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEdit(list);
+                          }}
+                          className="text-xs text-gray-400 hover:text-blue-500"
+                          aria-label={`Modifica lista ${list.name}`}
+                        >
+                          ✎
+                        </button>
+                      ) : null}
 
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(list);
-                        }}
-                        className="text-xs text-gray-400 hover:text-red-500"
-                        aria-label={`Elimina lista ${list.name}`}
-                      >
-                        ✕
-                      </button>
+                      {list.canDelete ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDelete(list);
+                          }}
+                          className="text-xs text-gray-400 hover:text-red-500"
+                          aria-label={`Elimina lista ${list.name}`}
+                        >
+                          ✕
+                        </button>
+                      ) : null}
                     </div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </>
         )}
       </div>
 
-      {createModal.isOpen && (
+      {createModal.isOpen ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm">
           <div className={`${shoppingCardClass} w-full max-w-md p-5`}>
-            <h2 className="mb-4 text-lg font-bold text-gray-900">Nuova lista spesa</h2>
+            <h2 className="mb-4 text-lg font-bold text-gray-900">
+              Nuova lista spesa
+            </h2>
 
             <form onSubmit={handleCreate} className="space-y-3">
               <input
@@ -263,32 +273,32 @@ const ShoppingListsColumn: React.FC<ShoppingListsColumnProps> = ({
 
               <select
                 className={shoppingInputClass}
-                value={form.visibility_id}
+                value={form.visibilityId}
                 onChange={(e) =>
-                  setForm((prev) => ({ ...prev, visibility_id: e.target.value }))
+                  setForm((prev) => ({ ...prev, visibilityId: e.target.value }))
                 }
                 required
               >
                 <option value="">Seleziona visibilità</option>
-                {renderCatalogOptions(listVisibilityOptions)}
+                {renderConfigOptions(listVisibilityOptions)}
               </select>
 
               <select
                 className={shoppingInputClass}
-                value={form.status_id}
+                value={form.statusId}
                 onChange={(e) =>
-                  setForm((prev) => ({ ...prev, status_id: e.target.value }))
+                  setForm((prev) => ({ ...prev, statusId: e.target.value }))
                 }
               >
                 <option value="">Default backend</option>
-                {renderCatalogOptions(listStatusOptions)}
+                {renderConfigOptions(listStatusOptions)}
               </select>
 
               <select
                 className={shoppingInputClass}
-                value={form.group_id}
+                value={form.groupId}
                 onChange={(e) =>
-                  setForm((prev) => ({ ...prev, group_id: e.target.value }))
+                  setForm((prev) => ({ ...prev, groupId: e.target.value }))
                 }
               >
                 <option value="">Nessun gruppo</option>
@@ -314,12 +324,14 @@ const ShoppingListsColumn: React.FC<ShoppingListsColumnProps> = ({
             </form>
           </div>
         </div>
-      )}
+      ) : null}
 
-      {editModal.isOpen && editModal.data && (
+      {editModal.isOpen && editModal.data ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm">
           <div className={`${shoppingCardClass} w-full max-w-md p-5`}>
-            <h2 className="mb-4 text-lg font-bold text-gray-900">Modifica lista</h2>
+            <h2 className="mb-4 text-lg font-bold text-gray-900">
+              Modifica lista
+            </h2>
 
             <form onSubmit={handleSaveEdit} className="space-y-3">
               <input
@@ -346,37 +358,37 @@ const ShoppingListsColumn: React.FC<ShoppingListsColumnProps> = ({
 
               <select
                 className={shoppingInputClass}
-                value={editForm.visibility_id}
+                value={editForm.visibilityId}
                 onChange={(e) =>
                   setEditForm((prev) => ({
                     ...prev,
-                    visibility_id: e.target.value,
+                    visibilityId: e.target.value,
                   }))
                 }
               >
                 <option value="">Seleziona visibilità</option>
-                {renderCatalogOptions(listVisibilityOptions)}
+                {renderConfigOptions(listVisibilityOptions)}
               </select>
 
               <select
                 className={shoppingInputClass}
-                value={editForm.status_id}
+                value={editForm.statusId}
                 onChange={(e) =>
                   setEditForm((prev) => ({
                     ...prev,
-                    status_id: e.target.value,
+                    statusId: e.target.value,
                   }))
                 }
               >
                 <option value="">Default backend</option>
-                {renderCatalogOptions(listStatusOptions)}
+                {renderConfigOptions(listStatusOptions)}
               </select>
 
               <select
                 className={shoppingInputClass}
-                value={editForm.group_id}
+                value={editForm.groupId}
                 onChange={(e) =>
-                  setEditForm((prev) => ({ ...prev, group_id: e.target.value }))
+                  setEditForm((prev) => ({ ...prev, groupId: e.target.value }))
                 }
               >
                 <option value="">Nessun gruppo</option>
@@ -402,7 +414,7 @@ const ShoppingListsColumn: React.FC<ShoppingListsColumnProps> = ({
             </form>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

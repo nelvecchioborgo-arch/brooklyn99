@@ -1,13 +1,18 @@
 // src/components/shared/shopping/ShoppingItemRow.tsx
 import React from 'react';
+import { Pencil, Trash2, Receipt, Check } from 'lucide-react';
 import type { ShoppingListItem } from '../../../types/shopping';
-import { shoppingCardClass } from './shoppingUi';
+import {
+  shoppingCardClass,
+  shoppingIconButtonClass,
+} from './shoppingUi';
 
 interface ShoppingItemRowProps {
   item: ShoppingListItem;
   onToggle: (item: ShoppingListItem) => void;
   onEdit: (item: ShoppingListItem) => void;
   onDelete: (item: ShoppingListItem) => void;
+  onPurchase: (item: ShoppingListItem) => void;
 }
 
 const ShoppingItemRow: React.FC<ShoppingItemRowProps> = ({
@@ -15,61 +20,84 @@ const ShoppingItemRow: React.FC<ShoppingItemRowProps> = ({
   onToggle,
   onEdit,
   onDelete,
+  onPurchase,
 }) => {
+  const itemLabel = item.nameOriginal || 'articolo';
+
   return (
     <div className={`${shoppingCardClass} flex items-center gap-2 p-2.5`}>
       <button
         type="button"
         onClick={() => onToggle(item)}
-        className={`h-5 w-5 shrink-0 rounded-full border-2 transition ${
-          item.is_purchased
-            ? 'border-green-500 bg-green-500'
-            : 'border-gray-300 hover:border-green-400'
-        }`}
+        className={[
+          'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full border-2 transition focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-1',
+          item.isPurchased
+            ? 'border-emerald-500 bg-emerald-500 text-white'
+            : 'border-slate-300 bg-white text-transparent hover:border-emerald-400',
+        ].join(' ')}
         aria-label={
-          item.is_purchased
-            ? `Segna ${item.name_original} come non acquistato`
-            : `Segna ${item.name_original} come acquistato`
+          item.isPurchased
+            ? `Segna ${itemLabel} come non acquistato`
+            : `Segna ${itemLabel} come acquistato`
         }
+        aria-pressed={item.isPurchased}
       >
-        {item.is_purchased && (
-          <span className="flex items-center justify-center text-xs text-white">
-            ✓
-          </span>
-        )}
+        <Check className="h-4 w-4" aria-hidden="true" />
       </button>
 
       <div className="min-w-0 flex-1">
         <p
-          className={`truncate text-sm ${
-            item.is_purchased
-              ? 'text-gray-400 line-through'
-              : 'text-gray-800'
-          }`}
+          className={[
+            'truncate text-sm',
+            item.isPurchased
+              ? 'text-slate-400 line-through'
+              : 'text-slate-800',
+          ].join(' ')}
         >
-          {item.name_original}
+          {item.nameOriginal}
         </p>
-        {item.notes && (
-          <p className="truncate text-xs text-gray-400">{item.notes}</p>
-        )}
+
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+          {item.quantity != null ? (
+            <span>
+              {item.quantity}
+              {item.unitLabel ? ` ${item.unitLabel}` : ''}
+            </span>
+          ) : null}
+
+          {item.notes ? <span className="truncate">{item.notes}</span> : null}
+        </div>
       </div>
 
       <div className="shrink-0 flex items-center gap-1">
         <button
           type="button"
-          onClick={() => onEdit(item)}
-          className="text-xs text-gray-400 hover:text-blue-500"
-          aria-label={`Modifica ${item.name_original}`}
+          onClick={() => onPurchase(item)}
+          className={shoppingIconButtonClass}
+          aria-label={`Registra acquisto per ${itemLabel}`}
         >
-          ✎
+          <Receipt className="h-4 w-4" aria-hidden="true" />
         </button>
+
+        <button
+          type="button"
+          onClick={() => onEdit(item)}
+          className={shoppingIconButtonClass}
+          aria-label={`Modifica ${itemLabel}`}
+        >
+          <Pencil className="h-4 w-4" aria-hidden="true" />
+        </button>
+
         <button
           type="button"
           onClick={() => onDelete(item)}
-          className="text-xs text-gray-400 hover:text-red-500"
-          aria-label={`Elimina ${item.name_original}`}
+          className={[
+            shoppingIconButtonClass,
+            'border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 focus:ring-red-100',
+          ].join(' ')}
+          aria-label={`Elimina ${itemLabel}`}
         >
-          ✕
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </div>

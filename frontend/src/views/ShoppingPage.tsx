@@ -1,4 +1,4 @@
-// src/views/ShoppingPage.tsx
+// DEPRECATE   src/views/ShoppingPage.tsx
 import React, { useMemo, useState } from 'react';
 import { useShoppingData } from '../hooks/useShoppingData';
 import ShoppingGroupsColumn from '../components/shared/shopping/ShoppingGroupsColumn';

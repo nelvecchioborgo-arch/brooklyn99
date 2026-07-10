@@ -1,65 +1,64 @@
 // src/components/shared/shopping/ShoppingItemEditModal.tsx
 import React from 'react';
-import type { CatalogOption, ItemFormState, ShoppingListItem } from '../../../types/shopping';
+import type { ConfigOption } from '../../../types/shopping';
+import type { ItemFormState } from './shoppingItems.utils';
 import {
   shoppingButtonPrimaryClass,
   shoppingButtonSecondaryClass,
   shoppingCardClass,
   shoppingInputClass,
 } from './shoppingUi';
-import { renderCatalogOptions } from './shoppingItems.utils';
+import { renderConfigOptions } from './shoppingItems.utils';
 
 interface ShoppingItemEditModalProps {
-  isOpen: boolean;
-  item: ShoppingListItem | null;
-  form: ItemFormState;
-  unitOptions: CatalogOption[];
-  itemStatusOptions: CatalogOption[];
-  onChange: React.Dispatch<React.SetStateAction<ItemFormState>>;
+  open: boolean;
+  editForm: ItemFormState;
+  setEditForm: React.Dispatch<React.SetStateAction<ItemFormState>>;
+  unitOptions: ConfigOption[];
+  itemStatusOptions: ConfigOption[];
   onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 }
 
 const ShoppingItemEditModal: React.FC<ShoppingItemEditModalProps> = ({
-  isOpen,
-  item,
-  form,
+  open,
+  editForm,
+  setEditForm,
   unitOptions,
   itemStatusOptions,
-  onChange,
   onClose,
   onSubmit,
 }) => {
-  if (!isOpen || !item) return null;
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm">
       <div className={`${shoppingCardClass} w-full max-w-md p-5`}>
-        <h2 className="mb-4 text-lg font-bold text-gray-900">Modifica articolo</h2>
+        <h2 className="mb-4 text-lg font-bold text-slate-900">Modifica articolo</h2>
 
         <form onSubmit={onSubmit} className="space-y-3">
           <input
             className={shoppingInputClass}
             placeholder="Nome"
-            value={form.name_original}
+            value={editForm.nameOriginal}
             onChange={(e) =>
-              onChange((prev) => ({
+              setEditForm((prev) => ({
                 ...prev,
-                name_original: e.target.value,
+                nameOriginal: e.target.value,
               }))
             }
             required
           />
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input
               type="number"
               step="any"
               className={shoppingInputClass}
               placeholder="Quantità"
-              value={form.quantity}
+              value={editForm.quantity}
               onChange={(e) =>
-                onChange((prev) => ({
+                setEditForm((prev) => ({
                   ...prev,
                   quantity: e.target.value,
                 }))
@@ -68,25 +67,25 @@ const ShoppingItemEditModal: React.FC<ShoppingItemEditModalProps> = ({
 
             <select
               className={shoppingInputClass}
-              value={form.unit_id}
+              value={editForm.unitId}
               onChange={(e) =>
-                onChange((prev) => ({
+                setEditForm((prev) => ({
                   ...prev,
-                  unit_id: e.target.value,
+                  unitId: e.target.value,
                 }))
               }
             >
               <option value="">Nessuna unità</option>
-              {renderCatalogOptions(unitOptions)}
+              {renderConfigOptions(unitOptions)}
             </select>
           </div>
 
           <input
             className={shoppingInputClass}
             placeholder="Note"
-            value={form.notes}
+            value={editForm.notes}
             onChange={(e) =>
-              onChange((prev) => ({
+              setEditForm((prev) => ({
                 ...prev,
                 notes: e.target.value,
               }))
@@ -95,16 +94,16 @@ const ShoppingItemEditModal: React.FC<ShoppingItemEditModalProps> = ({
 
           <select
             className={shoppingInputClass}
-            value={form.status_id}
+            value={editForm.statusId}
             onChange={(e) =>
-              onChange((prev) => ({
+              setEditForm((prev) => ({
                 ...prev,
-                status_id: e.target.value,
+                statusId: e.target.value,
               }))
             }
           >
             <option value="">Default backend</option>
-            {renderCatalogOptions(itemStatusOptions)}
+            {renderConfigOptions(itemStatusOptions)}
           </select>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -115,6 +114,7 @@ const ShoppingItemEditModal: React.FC<ShoppingItemEditModalProps> = ({
             >
               Annulla
             </button>
+
             <button type="submit" className={shoppingButtonPrimaryClass}>
               Salva
             </button>

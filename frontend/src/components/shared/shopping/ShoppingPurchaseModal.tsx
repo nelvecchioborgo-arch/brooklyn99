@@ -1,64 +1,61 @@
 // src/components/shared/shopping/ShoppingPurchaseModal.tsx
 import React from 'react';
-import type {
-  CatalogOption,
-  PurchaseFormState,
-  ShoppingListItem,
-  ShoppingSupplier,
-} from '../../../types/shopping';
+import type { ConfigOption, ShoppingSupplierOption } from '../../../types/shopping';
+import type { PurchaseFormState } from './shoppingItems.utils';
 import {
   shoppingButtonPrimaryClass,
   shoppingButtonSecondaryClass,
   shoppingCardClass,
   shoppingInputClass,
 } from './shoppingUi';
-import { renderCatalogOptions } from './shoppingItems.utils';
+import { renderConfigOptions } from './shoppingItems.utils';
 
 interface ShoppingPurchaseModalProps {
-  isOpen: boolean;
-  item: ShoppingListItem | null;
-  form: PurchaseFormState;
-  suppliers: ShoppingSupplier[];
-  currencyOptions: CatalogOption[];
-  offerFlagOptions: CatalogOption[];
-  onChange: React.Dispatch<React.SetStateAction<PurchaseFormState>>;
+  open: boolean;
+  itemName: string;
+  purchaseForm: PurchaseFormState;
+  setPurchaseForm: React.Dispatch<React.SetStateAction<PurchaseFormState>>;
+  suppliers: ShoppingSupplierOption[];
+  currencyOptions: ConfigOption[];
+  offerFlagOptions: ConfigOption[];
   onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 }
 
 const ShoppingPurchaseModal: React.FC<ShoppingPurchaseModalProps> = ({
-  isOpen,
-  item,
-  form,
+  open,
+  itemName,
+  purchaseForm,
+  setPurchaseForm,
   suppliers,
   currencyOptions,
   offerFlagOptions,
-  onChange,
   onClose,
   onSubmit,
 }) => {
-  if (!isOpen || !item) return null;
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm">
       <div className={`${shoppingCardClass} w-full max-w-2xl p-5`}>
-        <h2 className="mb-2 text-lg font-bold text-gray-900">Registra acquisto</h2>
-        <p className="mb-4 text-sm text-gray-500">
+        <h2 className="mb-2 text-lg font-bold text-slate-900">Registra acquisto</h2>
+
+        <p className="mb-4 text-sm text-slate-500">
           Stai completando{' '}
-          <span className="font-semibold text-gray-700">
-            {item.name_original}
+          <span className="font-semibold text-slate-700">
+            {itemName || 'articolo'}
           </span>
         </p>
 
         <form onSubmit={onSubmit} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <select
               className={shoppingInputClass}
-              value={form.supplier_id}
+              value={purchaseForm.supplierId}
               onChange={(e) =>
-                onChange((prev) => ({
+                setPurchaseForm((prev) => ({
                   ...prev,
-                  supplier_id: e.target.value,
+                  supplierId: e.target.value,
                 }))
               }
             >
@@ -76,9 +73,9 @@ const ShoppingPurchaseModal: React.FC<ShoppingPurchaseModalProps> = ({
               min="0"
               className={shoppingInputClass}
               placeholder="Prezzo"
-              value={form.price}
+              value={purchaseForm.price}
               onChange={(e) =>
-                onChange((prev) => ({
+                setPurchaseForm((prev) => ({
                   ...prev,
                   price: e.target.value,
                 }))
@@ -87,15 +84,15 @@ const ShoppingPurchaseModal: React.FC<ShoppingPurchaseModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input
               type="date"
               className={shoppingInputClass}
-              value={form.purchase_date}
+              value={purchaseForm.purchaseDate}
               onChange={(e) =>
-                onChange((prev) => ({
+                setPurchaseForm((prev) => ({
                   ...prev,
-                  purchase_date: e.target.value,
+                  purchaseDate: e.target.value,
                 }))
               }
               required
@@ -103,31 +100,31 @@ const ShoppingPurchaseModal: React.FC<ShoppingPurchaseModalProps> = ({
 
             <select
               className={shoppingInputClass}
-              value={form.currency_id}
+              value={purchaseForm.currencyId}
               onChange={(e) =>
-                onChange((prev) => ({
+                setPurchaseForm((prev) => ({
                   ...prev,
-                  currency_id: e.target.value,
+                  currencyId: e.target.value,
                 }))
               }
             >
               <option value="">Valuta</option>
-              {renderCatalogOptions(currencyOptions)}
+              {renderConfigOptions(currencyOptions)}
             </select>
           </div>
 
           <select
             className={shoppingInputClass}
-            value={form.offer_flag_id}
+            value={purchaseForm.offerFlagId}
             onChange={(e) =>
-              onChange((prev) => ({
+              setPurchaseForm((prev) => ({
                 ...prev,
-                offer_flag_id: e.target.value,
+                offerFlagId: e.target.value,
               }))
             }
           >
             <option value="">Nessun flag offerta</option>
-            {renderCatalogOptions(offerFlagOptions)}
+            {renderConfigOptions(offerFlagOptions)}
           </select>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -138,6 +135,7 @@ const ShoppingPurchaseModal: React.FC<ShoppingPurchaseModalProps> = ({
             >
               Annulla
             </button>
+
             <button type="submit" className={shoppingButtonPrimaryClass}>
               Conferma acquisto
             </button>

@@ -5,54 +5,60 @@ import {
   shoppingInputClass,
 } from './shoppingUi';
 
+type FiltroStato = 'tutti' | 'aperti' | 'completati';
+
 interface ShoppingItemsToolbarProps {
   currentListName: string;
-  activeListId: string;
-  filtroNome: string;
-  filtroStato: 'tutti' | 'aperti' | 'completati';
-  onFiltroNomeChange: (value: string) => void;
-  onFiltroStatoChange: (value: 'tutti' | 'aperti' | 'completati') => void;
+  activeListId: number | null;
+  searchQuery: string;
+  filtroStato: FiltroStato;
+  onFiltroStatoChange: (value: FiltroStato) => void;
   onAddItem: () => void;
 }
 
 const ShoppingItemsToolbar: React.FC<ShoppingItemsToolbarProps> = ({
   currentListName,
   activeListId,
-  filtroNome,
+  searchQuery,
   filtroStato,
-  onFiltroNomeChange,
   onFiltroStatoChange,
   onAddItem,
 }) => {
+  const hasActiveList = activeListId != null;
+
   return (
     <>
-      <div className="shrink-0 flex items-center justify-between">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-gray-700">
-          {currentListName}
-        </h2>
+      <div className="shrink-0 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-bold uppercase tracking-wider text-slate-700">
+            {currentListName}
+          </h2>
+
+          {searchQuery ? (
+            <p className="mt-1 truncate text-xs text-slate-500">
+              Filtro ricerca attivo: <span className="font-medium text-slate-700">{searchQuery}</span>
+            </p>
+          ) : null}
+        </div>
+
         <button
           type="button"
           onClick={onAddItem}
-          className={`${shoppingButtonPrimaryClass} text-xs`}
-        //  disabled={!activeListId}
+          className={`${shoppingButtonPrimaryClass} shrink-0 text-xs`}
+          disabled={!hasActiveList}
         >
           + Articolo
         </button>
       </div>
 
       <div className="shrink-0 flex gap-2">
-        <input
-          className={`${shoppingInputClass} flex-1`}
-          placeholder="Cerca..."
-          value={filtroNome}
-          onChange={(e) => onFiltroNomeChange(e.target.value)}
-        />
         <select
-          className={`${shoppingInputClass} w-32`}
+          className={`${shoppingInputClass} w-full sm:w-40`}
           value={filtroStato}
           onChange={(e) =>
-            onFiltroStatoChange(e.target.value as 'tutti' | 'aperti' | 'completati')
+            onFiltroStatoChange(e.target.value as FiltroStato)
           }
+          disabled={!hasActiveList}
         >
           <option value="tutti">Tutti</option>
           <option value="aperti">Aperti</option>

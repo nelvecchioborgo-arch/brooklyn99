@@ -1,22 +1,23 @@
 // src/components/shared/shopping/ShoppingItemCreateModal.tsx
 import React from 'react';
-import type { CatalogOption, ItemFormState, ShoppingList } from '../../../types/shopping';
+import type { ConfigOption } from '../../../types/shopping';
+import type { ItemFormState } from './shoppingItems.utils';
 import {
   shoppingButtonPrimaryClass,
   shoppingButtonSecondaryClass,
   shoppingInputClass,
+  shoppingCardClass,
 } from './shoppingUi';
-import { renderCatalogOptions } from './shoppingItems.utils';
+import { renderConfigOptions } from './shoppingItems.utils';
 
 interface ShoppingItemCreateModalProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   itemForm: ItemFormState;
   setItemForm: React.Dispatch<React.SetStateAction<ItemFormState>>;
-  activeListId: string;
-  lists: ShoppingList[];
-  unitOptions: CatalogOption[];
+  activeListId: number | null;
+  unitOptions: ConfigOption[];
 }
 
 const ShoppingItemCreateModal: React.FC<ShoppingItemCreateModalProps> = ({
@@ -26,67 +27,50 @@ const ShoppingItemCreateModal: React.FC<ShoppingItemCreateModalProps> = ({
   itemForm,
   setItemForm,
   activeListId,
-  lists,
   unitOptions,
 }) => {
   if (!open) return null;
 
-  const hasLockedList = Boolean(activeListId);
+  const hasActiveList = activeListId != null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+      <div className={`${shoppingCardClass} w-full max-w-xl p-6`}>
         <div className="mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">Nuovo articolo</h3>
-          <p className="text-sm text-gray-500">
-            Inserisci rapidamente un articolo nella lista spesa.
+          <h3 className="text-lg font-semibold text-slate-800">Nuovo articolo</h3>
+          <p className="text-sm text-slate-500">
+            Inserisci rapidamente un articolo nella lista spesa attiva.
           </p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm text-gray-600">
-              Lista
-              <select
-                className={shoppingInputClass}
-                value={itemForm.shopping_list_id}
-                onChange={(e) =>
-                  setItemForm((prev) => ({
-                    ...prev,
-                    shopping_list_id: e.target.value,
-                  }))
-                }
-                disabled={hasLockedList}
-                required
-              >
-                <option value="">Seleziona lista</option>
-                {lists.map((list) => (
-                  <option key={list.id} value={String(list.id)}>
-                    {list.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {!hasActiveList ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Seleziona prima una lista per aggiungere un articolo.
+            </div>
+          ) : null}
 
-            <label className="flex flex-col gap-1 text-sm text-gray-600">
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="flex flex-col gap-1 text-sm text-slate-600">
               Nome articolo
               <input
                 type="text"
                 className={shoppingInputClass}
-                value={itemForm.name_original}
+                value={itemForm.nameOriginal}
                 onChange={(e) =>
                   setItemForm((prev) => ({
                     ...prev,
-                    name_original: e.target.value,
+                    nameOriginal: e.target.value,
                   }))
                 }
                 placeholder="Es. Pasta, latte, zucchero"
                 required
                 autoFocus
+                disabled={!hasActiveList}
               />
             </label>
 
-            <label className="flex flex-col gap-1 text-sm text-gray-600">
+            <label className="flex flex-col gap-1 text-sm text-slate-600">
               Quantità
               <input
                 type="number"
@@ -101,28 +85,30 @@ const ShoppingItemCreateModal: React.FC<ShoppingItemCreateModalProps> = ({
                   }))
                 }
                 placeholder="Es. 2"
+                disabled={!hasActiveList}
               />
             </label>
 
-            <label className="flex flex-col gap-1 text-sm text-gray-600">
+            <label className="flex flex-col gap-1 text-sm text-slate-600 md:col-span-2">
               Unità
               <select
                 className={shoppingInputClass}
-                value={itemForm.unit_id}
+                value={itemForm.unitId}
                 onChange={(e) =>
                   setItemForm((prev) => ({
                     ...prev,
-                    unit_id: e.target.value,
+                    unitId: e.target.value,
                   }))
                 }
+                disabled={!hasActiveList}
               >
                 <option value="">Unità predefinita</option>
-                {renderCatalogOptions(unitOptions)}
+                {renderConfigOptions(unitOptions)}
               </select>
             </label>
           </div>
 
-          <label className="flex flex-col gap-1 text-sm text-gray-600">
+          <label className="flex flex-col gap-1 text-sm text-slate-600">
             Note
             <textarea
               className={`${shoppingInputClass} min-h-[96px] resize-y`}
@@ -134,6 +120,7 @@ const ShoppingItemCreateModal: React.FC<ShoppingItemCreateModalProps> = ({
                 }))
               }
               placeholder="Note opzionali"
+              disabled={!hasActiveList}
             />
           </label>
 
@@ -145,10 +132,11 @@ const ShoppingItemCreateModal: React.FC<ShoppingItemCreateModalProps> = ({
             >
               Annulla
             </button>
+
             <button
               type="submit"
               className={shoppingButtonPrimaryClass}
-              disabled={!itemForm.shopping_list_id || !itemForm.name_original.trim()}
+              disabled={!hasActiveList || !itemForm.nameOriginal.trim()}
             >
               Crea articolo
             </button>

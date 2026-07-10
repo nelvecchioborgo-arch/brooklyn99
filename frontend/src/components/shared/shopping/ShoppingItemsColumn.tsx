@@ -1,22 +1,31 @@
-// src/components/shared/shopping/ShoppingItemsColumn.tsx
-import React, { useEffect, useMemo, useState } from 'react';
-import { useShoppingMutations } from '../../../hooks/useShoppingMutations';
-import { useModal } from '../../../hooks/useModals';
-import { useDebounce } from '../../../hooks/useDebounce';
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from 'react';
+import { useShoppingMutations } from '@/hooks/shopping/useShoppingMutations';
+import { useModal } from '@/hooks/useModals';
+
 import type {
-  CatalogOption,
-  ItemFormState,
-  PurchaseFormState,
-  ShoppingList,
+  ConfigOption,
   ShoppingListItem,
-  ShoppingSupplier,
+  ShoppingListSummary,
+  ShoppingSupplierOption,
 } from '../../../types/shopping';
+
 import { shoppingCardClass } from './shoppingUi';
 import {
   emptyItemForm,
   emptyPurchaseForm,
   getEurCurrencyId,
 } from './shoppingItems.utils';
+import type {
+  ItemFormState,
+  PurchaseFormState,
+} from './shoppingItems.utils';
+
 import ShoppingItemCreateModal from './ShoppingItemCreateModal';
 import ShoppingItemEditModal from './ShoppingItemEditModal';
 import ShoppingPurchaseModal from './ShoppingPurchaseModal';
@@ -24,21 +33,30 @@ import ShoppingItemsToolbar from './ShoppingItemsToolbar';
 import ShoppingItemsList from './ShoppingItemsList';
 import ShoppingQuickAddBar from './ShoppingQuickAddBar';
 
-interface ShoppingItemsColumnProps {
-  items: ShoppingListItem[];
-  lists: ShoppingList[];
-  suppliers: ShoppingSupplier[];
-  unitOptions: CatalogOption[];
-  itemStatusOptions: CatalogOption[];
-  currencyOptions: CatalogOption[];
-  offerFlagOptions: CatalogOption[];
-  loading: boolean;
-  activeListId: string;
+type FiltroStato = 'tutti' | 'aperti' | 'completati';
+
+export interface ShoppingItemsColumnHandle {
+  openCreateModal: () => void;
 }
 
-const ShoppingItemsColumn: React.FC<ShoppingItemsColumnProps> = ({
+interface ShoppingItemsColumnProps {
+  items: ShoppingListItem[];
+  suppliers: ShoppingSupplierOption[];
+  unitOptions: ConfigOption[];
+  itemStatusOptions: ConfigOption[];
+  currencyOptions: ConfigOption[];
+  offerFlagOptions: ConfigOption[];
+  loading: boolean;
+  activeListId: number | null;
+  activeList: ShoppingListSummary | null;
+  searchQuery: string;
+}
+
+const ShoppingItemsColumn = forwardRef<
+  ShoppingItemsColumnHandle,
+  ShoppingItemsColumnProps
+>(({
   items,
-  lists,
   suppliers,
   unitOptions,
   itemStatusOptions,
@@ -46,7 +64,9 @@ const ShoppingItemsColumn: React.FC<ShoppingItemsColumnProps> = ({
   offerFlagOptions,
   loading,
   activeListId,
-}) => {
+  activeList,
+  searchQuery,
+}, ref) => {
   const mutations = useShoppingMutations();
   const containerRef = React.useRef<HTMLDivElement>(null);
 
@@ -54,9 +74,7 @@ const ShoppingItemsColumn: React.FC<ShoppingItemsColumnProps> = ({
   const editModal = useModal<ShoppingListItem>();
   const purchaseModal = useModal<ShoppingListItem>();
 
-  const [filtroStato, setFiltroStato] = useState<'tutti' | 'aperti' | 'completati'>('tutti');
-  const [filtroNome, setFiltroNome] = useState('');
-  const debouncedNome = useDebounce(filtroNome);
+  const [filtroStato, setFiltroStato] = useState<FiltroStato>('tutti');
 
   const [itemForm, setItemForm] = useState<ItemFormState>(emptyItemForm());
   const [editForm, setEditForm] = useState<ItemFormState>(emptyItemForm());
@@ -69,45 +87,46 @@ const ShoppingItemsColumn: React.FC<ShoppingItemsColumnProps> = ({
 
   const eurCurrencyId = useMemo(
     () => getEurCurrencyId(currencyOptions),
-    [currencyOptions],
+    [currencyOptions]
   );
 
   useEffect(() => {
     if (!eurCurrencyId) return;
 
     setPurchaseForm((prev) =>
-      prev.currency_id ? prev : { ...prev, currency_id: eurCurrencyId }
+      prev.currencyId ? prev : { ...prev, currencyId: eurCurrencyId }
     );
   }, [eurCurrencyId]);
+
+  const buildCreateForm = (): ItemFormState => ({
+    ...emptyItemForm(),
+    shoppingListId: activeListId != null ? String(activeListId) : '',
+  });
+
+  const handleOpenCreate = () => {
+    setItemForm(buildCreateForm());
+    setIsCreateOpen(true);
+  };
+
+  useImperativeHandle(ref, () => ({
+    openCreateModal: handleOpenCreate,
+  }), [activeListId]);
 
   const filteredItems = useMemo(() => {
     let result = items;
 
     if (filtroStato === 'aperti') {
-      result = result.filter((item) => !item.is_purchased);
+      result = result.filter((item) => !item.isPurchased);
     }
 
     if (filtroStato === 'completati') {
-      result = result.filter((item) => item.is_purchased);
-    }
-
-    const nome = debouncedNome.trim().toLowerCase();
-    if (nome) {
-      result = result.filter((item) =>
-        item.name_original.toLowerCase().includes(nome),
-      );
+      result = result.filter((item) => item.isPurchased);
     }
 
     return result;
-  }, [items, filtroStato, debouncedNome]);
+  }, [items, filtroStato]);
 
-  const currentListName =
-    lists.find((list) => String(list.id) === activeListId)?.name ?? 'Tutte le liste';
-
-  const buildCreateForm = (): ItemFormState => ({
-    ...emptyItemForm(),
-    shopping_list_id: activeListId || '',
-  });
+  const currentListName = activeList?.name ?? 'Lista spesa';
 
   const resetQuickAdd = () => {
     setQuickName('');
@@ -115,44 +134,39 @@ const ShoppingItemsColumn: React.FC<ShoppingItemsColumnProps> = ({
     setQuickUnitId('');
   };
 
-  const handleOpenCreate = () => {
-    setItemForm(buildCreateForm());
-    setIsCreateOpen(true);
-  };
-
   const handleCloseCreate = () => {
     setItemForm(buildCreateForm());
     setIsCreateOpen(false);
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!itemForm.name_original.trim()) return;
-    if (!itemForm.shopping_list_id) return;
+    if (!itemForm.nameOriginal.trim()) return;
+    if (!itemForm.shoppingListId) return;
 
     await mutations.createItem({
-      shopping_list_id: Number(itemForm.shopping_list_id),
-      name_original: itemForm.name_original.trim(),
+      shoppingListId: Number(itemForm.shoppingListId),
+      nameOriginal: itemForm.nameOriginal.trim(),
       quantity: itemForm.quantity ? Number(itemForm.quantity) : undefined,
-      unit_id: itemForm.unit_id ? Number(itemForm.unit_id) : undefined,
+      unitId: itemForm.unitId ? Number(itemForm.unitId) : undefined,
       notes: itemForm.notes?.trim() || undefined,
     });
 
     handleCloseCreate();
   };
 
-  const handleQuickAdd = async (e: React.FormEvent) => {
+  const handleQuickAdd = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!activeListId) return;
+    if (activeListId == null) return;
     if (!quickName.trim()) return;
 
     setQuickAdding(true);
     try {
       await mutations.createItem({
-        shopping_list_id: Number(activeListId),
-        name_original: quickName.trim(),
+        shoppingListId: activeListId,
+        nameOriginal: quickName.trim(),
         quantity: quickQuantity ? Number(quickQuantity) : undefined,
-        unit_id: quickUnitId ? Number(quickUnitId) : undefined,
+        unitId: quickUnitId ? Number(quickUnitId) : undefined,
         notes: undefined,
       });
       resetQuickAdd();
@@ -163,13 +177,14 @@ const ShoppingItemsColumn: React.FC<ShoppingItemsColumnProps> = ({
 
   const handleOpenEdit = (item: ShoppingListItem) => {
     setEditForm({
-      shopping_list_id: String(item.shopping_list_id ?? ''),
-      name_original: item.name_original ?? '',
+      shoppingListId: item.shoppingListId != null ? String(item.shoppingListId) : '',
+      nameOriginal: item.nameOriginal ?? '',
       quantity: item.quantity != null ? String(item.quantity) : '',
-      unit_id: item.unit_id != null ? String(item.unit_id) : '',
-      status_id: item.status_id != null ? String(item.status_id) : '',
+      unitId: item.unitId != null ? String(item.unitId) : '',
+      statusId: item.statusId != null ? String(item.statusId) : '',
       notes: item.notes ?? '',
     });
+
     editModal.open(item);
   };
 
@@ -178,37 +193,35 @@ const ShoppingItemsColumn: React.FC<ShoppingItemsColumnProps> = ({
     editModal.close();
   };
 
-  const handleEdit = async (e: React.FormEvent) => {
+  const handleEdit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editModal.data) return;
 
     await mutations.updateItem(editModal.data.id, {
-      shopping_list_id: editForm.shopping_list_id
-        ? Number(editForm.shopping_list_id)
-        : undefined,
-      name_original: editForm.name_original.trim() || undefined,
+      nameOriginal: editForm.nameOriginal.trim() || undefined,
       quantity: editForm.quantity ? Number(editForm.quantity) : undefined,
-      unit_id: editForm.unit_id ? Number(editForm.unit_id) : undefined,
+      unitId: editForm.unitId ? Number(editForm.unitId) : undefined,
+      statusId: editForm.statusId ? Number(editForm.statusId) : undefined,
       notes: editForm.notes?.trim() || undefined,
     });
 
     handleCloseEdit();
   };
 
-  const handleDelete = async (itemId: number) => {
-    await mutations.deleteItem(itemId);
+  const handleDelete = async (item: ShoppingListItem) => {
+    await mutations.deleteItem(item.id, item.shoppingListId);
   };
 
   const handleTogglePurchased = async (item: ShoppingListItem) => {
-    await mutations.updateItem(item.id, {
-      is_purchased: !item.is_purchased,
+    await mutations.togglePurchased(item.id, item.shoppingListId, {
+      isPurchased: !item.isPurchased,
     });
   };
 
   const handleOpenPurchase = (item: ShoppingListItem) => {
     setPurchaseForm({
       ...emptyPurchaseForm(eurCurrencyId),
-      purchase_date: new Date().toISOString().slice(0, 10),
+      purchaseDate: new Date().toISOString().slice(0, 10),
     });
     purchaseModal.open(item);
   };
@@ -218,19 +231,20 @@ const ShoppingItemsColumn: React.FC<ShoppingItemsColumnProps> = ({
     purchaseModal.close();
   };
 
-  const handlePurchase = async (e: React.FormEvent) => {
+  const handlePurchase = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!purchaseModal.data) return;
+    if (activeListId == null) return;
 
     await mutations.addPrice({
-      itemId: purchaseModal.data.id,
-      form: {
-        supplier_id: purchaseForm.supplier_id || undefined,
-        price: purchaseForm.price,
-        purchase_date: purchaseForm.purchase_date,
-        currency_id: purchaseForm.currency_id,
-        offer_flag_id: purchaseForm.offer_flag_id || undefined,
-      },
+      shoppingListId: activeListId,
+      shoppingListItemId: purchaseModal.data.id,
+      productId: purchaseModal.data.productId,
+      supplierId: purchaseForm.supplierId ? Number(purchaseForm.supplierId) : undefined,
+      purchaseDate: purchaseForm.purchaseDate,
+      price: Number(purchaseForm.price),
+      currencyId: purchaseForm.currencyId ? Number(purchaseForm.currencyId) : undefined,
+      offerFlagId: purchaseForm.offerFlagId ? Number(purchaseForm.offerFlagId) : undefined,
     });
 
     handleClosePurchase();
@@ -241,9 +255,8 @@ const ShoppingItemsColumn: React.FC<ShoppingItemsColumnProps> = ({
       <ShoppingItemsToolbar
         currentListName={currentListName}
         activeListId={activeListId}
-        filtroNome={filtroNome}
+        searchQuery={searchQuery}
         filtroStato={filtroStato}
-        onFiltroNomeChange={setFiltroNome}
         onFiltroStatoChange={setFiltroStato}
         onAddItem={handleOpenCreate}
       />
@@ -269,6 +282,7 @@ const ShoppingItemsColumn: React.FC<ShoppingItemsColumnProps> = ({
           onEdit={handleOpenEdit}
           onDelete={handleDelete}
           onToggle={handleTogglePurchased}
+          onPurchase={handleOpenPurchase}
         />
       </div>
 
@@ -279,7 +293,6 @@ const ShoppingItemsColumn: React.FC<ShoppingItemsColumnProps> = ({
         itemForm={itemForm}
         setItemForm={setItemForm}
         activeListId={activeListId}
-        lists={lists}
         unitOptions={unitOptions}
       />
 
@@ -289,7 +302,6 @@ const ShoppingItemsColumn: React.FC<ShoppingItemsColumnProps> = ({
         onSubmit={handleEdit}
         editForm={editForm}
         setEditForm={setEditForm}
-        lists={lists}
         unitOptions={unitOptions}
         itemStatusOptions={itemStatusOptions}
       />
@@ -303,10 +315,12 @@ const ShoppingItemsColumn: React.FC<ShoppingItemsColumnProps> = ({
         suppliers={suppliers}
         currencyOptions={currencyOptions}
         offerFlagOptions={offerFlagOptions}
-        itemName={purchaseModal.data?.name_original ?? ''}
+        itemName={purchaseModal.data?.nameOriginal ?? ''}
       />
     </div>
   );
-};
+});
+
+ShoppingItemsColumn.displayName = 'ShoppingItemsColumn';
 
 export default ShoppingItemsColumn;

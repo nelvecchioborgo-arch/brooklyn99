@@ -9,7 +9,8 @@ interface ShoppingItemsListProps {
   containerRef: React.RefObject<HTMLDivElement>;
   onToggle: (item: ShoppingListItem) => void;
   onEdit: (item: ShoppingListItem) => void;
-  onDelete: (itemId: number) => void;
+  onDelete: (item: ShoppingListItem) => void;
+  onPurchase: (item: ShoppingListItem) => void;
 }
 
 const ShoppingItemsList: React.FC<ShoppingItemsListProps> = ({
@@ -19,6 +20,7 @@ const ShoppingItemsList: React.FC<ShoppingItemsListProps> = ({
   onToggle,
   onEdit,
   onDelete,
+  onPurchase,
 }) => {
   return (
     <div
@@ -27,21 +29,27 @@ const ShoppingItemsList: React.FC<ShoppingItemsListProps> = ({
     >
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-2">
         {loading ? (
-          <p className="py-4 text-center text-xs text-gray-400">Caricamento...</p>
+          <p className="py-4 text-center text-xs text-gray-400" role="status" aria-live="polite">
+            Caricamento...
+          </p>
         ) : items.length === 0 ? (
-          <p className="py-4 text-center text-xs text-gray-400">Nessun articolo.</p>
+          <p className="py-4 text-center text-xs text-gray-400">
+            Nessun articolo.
+          </p>
         ) : (
-          <div className="space-y-1.5">
+          <ul className="space-y-1.5" role="list">
             {items.map((item) => (
-              <ShoppingItemRow
-                key={item.id}
-                item={item}
-                onToggle={onToggle}
-                onEdit={onEdit}
-                onDelete={() => onDelete(item.id)}
-              />
+              <li key={item.id}>
+                <ShoppingItemRow
+                  item={item}
+                  onToggle={onToggle}
+                  onEdit={onEdit}
+                  onDelete={() => onDelete(item)}
+                  onPurchase={onPurchase}
+                />
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
     </div>
