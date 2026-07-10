@@ -1,61 +1,72 @@
-// frontend/src/types/shopping.ts
+// src/types/shopping.ts
+
+/* =========================
+ * Shared primitives
+ * ========================= */
 
 export type ShoppingViewMode = 'items' | 'bulk-purchase';
-export type ShoppingFilterStatus = 'tutti' | 'aperti' | 'completati';
 
 export interface ConfigOption {
   id: number;
-  codeType: string;
-  codeValue: string;
   codeName: string;
+  displayName?: string | null;
+  description?: string | null;
   sortOrder?: number | null;
-  active: boolean;
+  isActive?: boolean;
 }
 
 export interface ShoppingGroupSummary {
   id: number;
   name: string;
   description?: string | null;
-  statusId: number;
-  statusCode?: string | null;
-}
-
-export interface ShoppingListSummary {
-  id: number;
-  userId: number;
-  groupId?: number | null;
-  visibilityId: number;
-  visibilityCode?: string | null;
-  statusId: number;
-  statusCode?: string | null;
-  name: string;
-  description?: string | null;
-  createdAt: string;
-  updatedAt?: string | null;
-
-  group?: ShoppingGroupSummary | null;
-
-  totalItemsCount: number;
-  openItemsCount: number;
-  purchasedItemsCount: number;
-
-  canEdit: boolean;
-  canArchive: boolean;
-  canDelete: boolean;
+  visibilityId?: number | null;
+  statusId?: number | null;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 export interface ShoppingSupplierOption {
   id: number;
   name: string;
-  nameNormalized: string;
-  statusId: number;
-  statusCode?: string | null;
+  statusId?: number | null;
+  statusCodeName?: string | null;
+  isActive?: boolean;
 }
 
 export interface ShoppingProductOption {
   id: number;
   nameNormalized: string;
-  displayName?: string | null;
+  displayName: string;
+  defaultUnitId?: number | null;
+  defaultUnitCodeName?: string | null;
+  lastPurchasePrice?: number | null;
+  lastPurchaseCurrencyId?: number | null;
+  lastPurchaseCurrencyCodeName?: string | null;
+  lastSupplierId?: number | null;
+  lastSupplierName?: string | null;
+  lastPurchaseDate?: string | null;
+}
+
+/* =========================
+ * Read models
+ * ========================= */
+
+export interface ShoppingListSummary {
+  id: number;
+  name: string;
+  description?: string | null;
+  groupId?: number | null;
+  groupName?: string | null;
+  visibilityId: number;
+  visibilityCodeName?: string | null;
+  statusId?: number | null;
+  statusCodeName?: string | null;
+  openItemsCount: number;
+  purchasedItemsCount: number;
+  totalItemsCount: number;
+  canEdit: boolean;
+  canDelete: boolean;
+  canArchive?: boolean;
 }
 
 export interface ShoppingListItem {
@@ -64,38 +75,87 @@ export interface ShoppingListItem {
   productId: number;
 
   nameOriginal: string;
-  nameNormalized: string;
+  nameNormalized?: string | null;
 
   quantity?: number | null;
   unitId?: number | null;
-  unitLabel?: string | null;
+  unitCodeName?: string | null;
 
-  notes?: string | null;
-
-  statusId: number;
-  statusCode?: string | null;
+  statusId?: number | null;
+  statusCodeName?: string | null;
 
   isPurchased: boolean;
-  purchasedAt?: string | null;
-  purchasedByUserId?: number | null;
-  purchasedByUsername?: string | null;
+  notes?: string | null;
 
-  createdByUserId: number;
-  createdByUsername?: string | null;
-  updatedByUserId?: number | null;
+  lastPrice?: number | null;
+  lastCurrencyId?: number | null;
+  lastCurrencyCodeName?: string | null;
+  lastSupplierId?: number | null;
+  lastSupplierName?: string | null;
+  lastPurchaseDate?: string | null;
 
-  createdAt: string;
-  updatedAt?: string | null;
-
-  canEdit: boolean;
-  canTogglePurchased: boolean;
-  canDelete: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export interface ShoppingListDetail {
-  list: ShoppingListSummary;
-  items: ShoppingListItem[];
+export interface InventoryBatchRow {
+  id: number;
+  productId: number;
+  productNameNormalized?: string | null;
+
+  shoppingListItemId?: number | null;
+  shoppingListId?: number | null;
+  shoppingListName?: string | null;
+
+  supplierId?: number | null;
+  supplierName?: string | null;
+
+  quantity?: number | null;
+  unitId?: number | null;
+  unitCodeName?: string | null;
+
+  purchasePrice: number;
+  currencyId?: number | null;
+  currencyCodeName?: string | null;
+
+  offerFlagId?: number | null;
+  offerFlagCodeName?: string | null;
+
+  purchaseDate: string;
+  expirationDate?: string | null;
 }
+
+export interface ShoppingProductInsights {
+  productId: number;
+  lastPrice?: number | null;
+  lastCurrencyId?: number | null;
+  lastCurrencyCodeName?: string | null;
+  lastSupplierId?: number | null;
+  lastSupplierName?: string | null;
+  lastPurchaseDate?: string | null;
+
+  bestPrice?: number | null;
+  bestCurrencyId?: number | null;
+  bestCurrencyCodeName?: string | null;
+  bestSupplierId?: number | null;
+  bestSupplierName?: string | null;
+
+  averagePrice?: number | null;
+  totalPurchases?: number;
+}
+
+export interface ShoppingConfigBundle {
+  unitOptions: ConfigOption[];
+  itemStatusOptions: ConfigOption[];
+  currencyOptions: ConfigOption[];
+  offerFlagOptions: ConfigOption[];
+  visibilityOptions: ConfigOption[];
+  listStatusOptions: ConfigOption[];
+}
+
+/* =========================
+ * API write payloads
+ * ========================= */
 
 export interface ShoppingPriceCreatePayload {
   shoppingListId: number;
@@ -109,30 +169,114 @@ export interface ShoppingPriceCreatePayload {
   expirationDate?: string | null;
 }
 
-export interface InventoryBatchRow {
-  id: number;
-  productId: number;
-  listItemId?: number | null;
-  purchaseDate: string;
-  quantityPurchased: number;
-  purchasePrice: number;
-  supplierId?: number | null;
-  supplierName?: string | null;
-  isOnSale: boolean;
-  expirationDate?: string | null;
-  purchasedByUserId?: number | null;
-  purchasedByUsername?: string | null;
+export interface ShoppingListCreatePayload {
+  name: string;
+  description?: string;
+  groupId?: number | null;
+  visibilityId: number;
+  statusId?: number | null;
 }
 
-export interface ShoppingConfigBundle {
-  visibilityOptions: ConfigOption[];
-  listStatusOptions: ConfigOption[];
-  itemStatusOptions: ConfigOption[];
-  unitOptions: ConfigOption[];
-  currencyOptions: ConfigOption[];
-  offerFlagOptions: ConfigOption[];
-  groupRoleOptions: ConfigOption[];
+export interface ShoppingListUpdatePayload {
+  name?: string;
+  description?: string | null;
+  groupId?: number | null;
+  visibilityId?: number | null;
+  statusId?: number | null;
 }
+
+export interface ShoppingListItemCreatePayload {
+  shoppingListId: number;
+  productId?: number | null;
+  nameOriginal: string;
+  quantity?: number | null;
+  unitId?: number | null;
+  notes?: string | null;
+  statusId?: number | null;
+}
+
+export interface ShoppingListItemUpdatePayload {
+  nameOriginal?: string;
+  quantity?: number | null;
+  unitId?: number | null;
+  notes?: string | null;
+  statusId?: number | null;
+}
+
+export interface ToggleShoppingListItemPurchasedPayload {
+  isPurchased: boolean;
+}
+
+export interface ShoppingSupplierCreatePayload {
+  name: string;
+  statusId?: number | null;
+}
+
+export interface ShoppingSupplierUpdatePayload {
+  name?: string;
+  statusId?: number | null;
+}
+
+export interface ShoppingPriceUpdatePayload {
+  supplierId?: number | null;
+  purchaseDate?: string;
+  price?: number;
+  currencyId?: number | null;
+  offerFlagId?: number | null;
+  expirationDate?: string | null;
+}
+
+/* =========================
+ * Mutation argument objects
+ * ========================= */
+
+export interface UpdateShoppingListArgs {
+  id: number;
+  data: ShoppingListUpdatePayload;
+}
+
+export interface DeleteShoppingListArgs {
+  id: number;
+}
+
+export interface UpdateShoppingListItemArgs {
+  id: number;
+  listId: number;
+  data: ShoppingListItemUpdatePayload;
+}
+
+export interface DeleteShoppingListItemArgs {
+  id: number;
+  listId: number;
+}
+
+export interface ToggleShoppingListItemPurchasedArgs {
+  id: number;
+  listId: number;
+  data: ToggleShoppingListItemPurchasedPayload;
+}
+
+export interface UpdateShoppingSupplierArgs {
+  id: number;
+  data: ShoppingSupplierUpdatePayload;
+}
+
+export interface DeleteShoppingSupplierArgs {
+  id: number;
+}
+
+export interface UpdateShoppingPriceArgs {
+  priceId: number;
+  payload: ShoppingPriceUpdatePayload;
+}
+
+export interface DeleteShoppingPriceArgs {
+  priceId: number;
+}
+
+/* =========================
+ * Hook contracts
+ * ========================= */
 
 export interface UseShoppingDataResult {
   lists: ShoppingListSummary[];
@@ -146,8 +290,40 @@ export interface UseShoppingDataResult {
 
   listsLoading: boolean;
   itemsLoading: boolean;
+  suppliersLoading: boolean;
+  configLoading: boolean;
 
-  setActiveListId: (listId: number | null) => void;
+  isInitialLoading: boolean;
+
+  setActiveListId: (id: number | null) => void;
+
   refreshLists: () => Promise<void>;
-  refreshItems: (listId: number) => Promise<void>;
+  refreshItems: (listId?: number | null) => Promise<void>;
+  refreshSuppliers: () => Promise<void>;
+  refreshConfig: () => Promise<void>;
+}
+
+export interface UseShoppingMutationsResult {
+  createList: (payload: ShoppingListCreatePayload) => Promise<ShoppingListSummary>;
+  updateList: (args: UpdateShoppingListArgs) => Promise<ShoppingListSummary>;
+  deleteList: (id: number) => Promise<void>;
+
+  createItem: (payload: ShoppingListItemCreatePayload) => Promise<ShoppingListItem>;
+  updateItem: (args: UpdateShoppingListItemArgs) => Promise<ShoppingListItem>;
+  deleteItem: (args: DeleteShoppingListItemArgs) => Promise<void>;
+  togglePurchased: (
+    args: ToggleShoppingListItemPurchasedArgs
+  ) => Promise<ShoppingListItem>;
+
+  createSupplier: (
+    payload: ShoppingSupplierCreatePayload
+  ) => Promise<ShoppingSupplierOption>;
+  updateSupplier: (
+    args: UpdateShoppingSupplierArgs
+  ) => Promise<ShoppingSupplierOption>;
+  deleteSupplier: (id: number) => Promise<void>;
+
+  addPrice: (payload: ShoppingPriceCreatePayload) => Promise<void>;
+  updatePrice: (args: UpdateShoppingPriceArgs) => Promise<void>;
+  deletePrice: (priceId: number) => Promise<void>;
 }

@@ -1,93 +1,127 @@
-// frontend/src/hooks/shopping/useShoppingData.ts
-import { useEffect, useMemo, useState } from 'react';
+// src/hooks/shopping/useShoppingData.ts
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type {
-  ShoppingListItem,
-  ShoppingListSummary,
-  UseShoppingDataResult,
-} from '@/types/shopping';
 import {
-  fetchShoppingListItems,
   fetchShoppingLists,
+  fetchShoppingListItems,
+  fetchShoppingSuppliers,
+  fetchShoppingConfig,
+  shoppingQueryKeys,
 } from '@/api/shoppingApi';
 
-const shoppingQueryKeys = {
-  all: ['shopping'] as const,
-  lists: () => [...shoppingQueryKeys.all, 'lists'] as const,
-  items: (listId: number | null) =>
-    [...shoppingQueryKeys.all, 'items', listId] as const,
-};
+import type { UseShoppingDataResult } from '@/types/shopping';
 
-export function useShoppingData(): UseShoppingDataResult {
+export const useShoppingData = (): UseShoppingDataResult => {
   const queryClient = useQueryClient();
-
   const [activeListId, setActiveListId] = useState<number | null>(null);
 
-  const {
-    data: lists = [],
-    isLoading: listsLoading,
-  } = useQuery<ShoppingListSummary[]>({
+  const listsQuery = useQuery({
     queryKey: shoppingQueryKeys.lists(),
-    queryFn: fetchShoppingLists,
+    queryFn: ({ signal }) => fetchShoppingLists(signal),
     staleTime: 60_000,
+    gcTime: 10 * 60_000,
   });
 
-  const {
-    data: items = [],
-    isLoading: itemsLoading,
-  } = useQuery<ShoppingListItem[]>({
-    queryKey: shoppingQueryKeys.items(activeListId),
-    queryFn: () => fetchShoppingListItems(activeListId as number),
-    enabled: activeListId !== null,
-    staleTime: 30_000,
+  const suppliersQuery = useQuery({
+    queryKey: shoppingQueryKeys.suppliers(),
+    queryFn: ({ signal }) => fetchShoppingSuppliers(signal),
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
   });
 
-  useEffect(() => {
-    setActiveListId((current) => {
-      if (current && lists.some((list) => list.id === current)) {
-        return current;
-      }
+  const configQuery = useQuery({
+    queryKey: shoppingQueryKeys.config(),
+    queryFn: ({ signal }) => fetchShoppingConfig(signal),
+    staleTime: 30 * 60_000,
+    gcTime: 60 * 60_000,
+  });
 
-      return lists.length > 0 ? lists[0].id : null;
-    });
-  }, [lists]);
+  const resolvedActiveListId = useMemo(() => {
+    const lists = listsQuery.data ?? [];
+    if (lists.length === 0) return null;
+
+    if (activeListId !== null && lists.some((list) => list.id === activeListId)) {
+      return activeListId;
+    }
+
+    return lists[0].id;
+  }, [activeListId, listsQuery.data]);
+
+  const itemsQuery = useQuery({
+    queryKey: shoppingQueryKeys.items(resolvedActiveListId),
+    queryFn: ({ signal }) => fetchShoppingListItems(resolvedActiveListId!, signal),
+    enabled: resolvedActiveListId !== null,
+    staleTime: 5_000,
+    gcTime: 10 * 60_000,
+    placeholderData: (previousData) => previousData,
+  });
+
+  const lists = listsQuery.data ?? [];
+  const items = itemsQuery.data ?? [];
+  const suppliers = suppliersQuery.data ?? [];
+  const config = configQuery.data ?? null;
 
   const activeList = useMemo(
-    () => lists.find((list) => list.id === activeListId) ?? null,
-    [lists, activeListId]
+    () => lists.find((list) => list.id === resolvedActiveListId) ?? null,
+    [lists, resolvedActiveListId]
   );
 
-  const refreshLists = async (): Promise<void> => {
+  const isInitialLoading =
+    listsQuery.isLoading ||
+    configQuery.isLoading ||
+    suppliersQuery.isLoading ||
+    (resolvedActiveListId !== null && itemsQuery.isLoading && items.length === 0);
+
+  const refreshLists = async () => {
     await queryClient.invalidateQueries({
       queryKey: shoppingQueryKeys.lists(),
     });
   };
 
-  const refreshItems = async (listId: number): Promise<void> => {
+  const refreshItems = async (listId?: number | null) => {
+    const targetListId = listId ?? resolvedActiveListId;
+    if (targetListId === null) return;
+
     await queryClient.invalidateQueries({
-      queryKey: shoppingQueryKeys.items(listId),
+      queryKey: shoppingQueryKeys.items(targetListId),
     });
   };
 
-  const refreshBootstrap = async (): Promise<void> => {
-    return Promise.resolve();
+  const refreshSuppliers = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: shoppingQueryKeys.suppliers(),
+    });
+  };
+
+  const refreshConfig = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: shoppingQueryKeys.config(),
+    });
   };
 
   return {
     lists,
-    activeListId,
+    activeListId: resolvedActiveListId,
     activeList,
     items,
-    suppliers: [],
+
+    suppliers,
     products: [],
-    config: null,
-    listsLoading,
-    itemsLoading: activeListId === null ? false : itemsLoading,
-    bootstrapLoading: false,
+    config,
+
+    listsLoading: listsQuery.isLoading,
+    itemsLoading: itemsQuery.isLoading,
+    suppliersLoading: suppliersQuery.isLoading,
+    configLoading: configQuery.isLoading,
+
+    isInitialLoading,
+
     setActiveListId,
+
     refreshLists,
     refreshItems,
-    refreshBootstrap,
+    refreshSuppliers,
+    refreshConfig,
   };
-}
+};

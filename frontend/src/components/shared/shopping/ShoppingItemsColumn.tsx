@@ -55,271 +55,301 @@ interface ShoppingItemsColumnProps {
 const ShoppingItemsColumn = forwardRef<
   ShoppingItemsColumnHandle,
   ShoppingItemsColumnProps
->(({
-  items,
-  suppliers,
-  unitOptions,
-  itemStatusOptions,
-  currencyOptions,
-  offerFlagOptions,
-  loading,
-  activeListId,
-  activeList,
-  searchQuery,
-}, ref) => {
-  const mutations = useShoppingMutations();
-  const containerRef = React.useRef<HTMLDivElement>(null);
+>(
+  (
+    {
+      items,
+      suppliers,
+      unitOptions,
+      itemStatusOptions,
+      currencyOptions,
+      offerFlagOptions,
+      loading,
+      activeListId,
+      activeList,
+      searchQuery,
+    },
+    ref
+  ) => {
+    const mutations = useShoppingMutations();
+    const containerRef = React.useRef<HTMLDivElement>(null);
 
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const editModal = useModal<ShoppingListItem>();
-  const purchaseModal = useModal<ShoppingListItem>();
+    const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const editModal = useModal<ShoppingListItem>();
+    const purchaseModal = useModal<ShoppingListItem>();
 
-  const [filtroStato, setFiltroStato] = useState<FiltroStato>('tutti');
+    const [filtroStato, setFiltroStato] = useState<FiltroStato>('tutti');
 
-  const [itemForm, setItemForm] = useState<ItemFormState>(emptyItemForm());
-  const [editForm, setEditForm] = useState<ItemFormState>(emptyItemForm());
-  const [purchaseForm, setPurchaseForm] = useState<PurchaseFormState>(emptyPurchaseForm());
-
-  const [quickName, setQuickName] = useState('');
-  const [quickQuantity, setQuickQuantity] = useState('');
-  const [quickUnitId, setQuickUnitId] = useState('');
-  const [quickAdding, setQuickAdding] = useState(false);
-
-  const eurCurrencyId = useMemo(
-    () => getEurCurrencyId(currencyOptions),
-    [currencyOptions]
-  );
-
-  useEffect(() => {
-    if (!eurCurrencyId) return;
-
-    setPurchaseForm((prev) =>
-      prev.currencyId ? prev : { ...prev, currencyId: eurCurrencyId }
+    const [itemForm, setItemForm] = useState<ItemFormState>(emptyItemForm());
+    const [editForm, setEditForm] = useState<ItemFormState>(emptyItemForm());
+    const [purchaseForm, setPurchaseForm] = useState<PurchaseFormState>(
+      emptyPurchaseForm()
     );
-  }, [eurCurrencyId]);
 
-  const buildCreateForm = (): ItemFormState => ({
-    ...emptyItemForm(),
-    shoppingListId: activeListId != null ? String(activeListId) : '',
-  });
+    const [quickName, setQuickName] = useState('');
+    const [quickQuantity, setQuickQuantity] = useState('');
+    const [quickUnitId, setQuickUnitId] = useState('');
+    const [quickAdding, setQuickAdding] = useState(false);
 
-  const handleOpenCreate = () => {
-    setItemForm(buildCreateForm());
-    setIsCreateOpen(true);
-  };
+    const eurCurrencyId = useMemo(
+      () => getEurCurrencyId(currencyOptions),
+      [currencyOptions]
+    );
 
-  useImperativeHandle(ref, () => ({
-    openCreateModal: handleOpenCreate,
-  }), [activeListId]);
+    useEffect(() => {
+      if (!eurCurrencyId) return;
 
-  const filteredItems = useMemo(() => {
-    let result = items;
+      setPurchaseForm((prev) =>
+        prev.currencyId ? prev : { ...prev, currencyId: eurCurrencyId }
+      );
+    }, [eurCurrencyId]);
 
-    if (filtroStato === 'aperti') {
-      result = result.filter((item) => !item.isPurchased);
-    }
-
-    if (filtroStato === 'completati') {
-      result = result.filter((item) => item.isPurchased);
-    }
-
-    return result;
-  }, [items, filtroStato]);
-
-  const currentListName = activeList?.name ?? 'Lista spesa';
-
-  const resetQuickAdd = () => {
-    setQuickName('');
-    setQuickQuantity('');
-    setQuickUnitId('');
-  };
-
-  const handleCloseCreate = () => {
-    setItemForm(buildCreateForm());
-    setIsCreateOpen(false);
-  };
-
-  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!itemForm.nameOriginal.trim()) return;
-    if (!itemForm.shoppingListId) return;
-
-    await mutations.createItem({
-      shoppingListId: Number(itemForm.shoppingListId),
-      nameOriginal: itemForm.nameOriginal.trim(),
-      quantity: itemForm.quantity ? Number(itemForm.quantity) : undefined,
-      unitId: itemForm.unitId ? Number(itemForm.unitId) : undefined,
-      notes: itemForm.notes?.trim() || undefined,
+    const buildCreateForm = (): ItemFormState => ({
+      ...emptyItemForm(),
+      shoppingListId: activeListId != null ? String(activeListId) : '',
     });
 
-    handleCloseCreate();
-  };
+    const handleOpenCreate = () => {
+      setItemForm(buildCreateForm());
+      setIsCreateOpen(true);
+    };
 
-  const handleQuickAdd = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (activeListId == null) return;
-    if (!quickName.trim()) return;
+    useImperativeHandle(
+      ref,
+      () => ({
+        openCreateModal: handleOpenCreate,
+      }),
+      [activeListId]
+    );
 
-    setQuickAdding(true);
-    try {
+    const filteredItems = useMemo(() => {
+      let result = items;
+
+      if (filtroStato === 'aperti') {
+        result = result.filter((item) => !item.isPurchased);
+      }
+
+      if (filtroStato === 'completati') {
+        result = result.filter((item) => item.isPurchased);
+      }
+
+      return result;
+    }, [items, filtroStato]);
+
+    const currentListName = activeList?.name ?? 'Lista spesa';
+
+    const resetQuickAdd = () => {
+      setQuickName('');
+      setQuickQuantity('');
+      setQuickUnitId('');
+    };
+
+    const handleCloseCreate = () => {
+      setItemForm(buildCreateForm());
+      setIsCreateOpen(false);
+    };
+
+    const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (!itemForm.nameOriginal.trim()) return;
+      if (!itemForm.shoppingListId) return;
+
       await mutations.createItem({
-        shoppingListId: activeListId,
-        nameOriginal: quickName.trim(),
-        quantity: quickQuantity ? Number(quickQuantity) : undefined,
-        unitId: quickUnitId ? Number(quickUnitId) : undefined,
-        notes: undefined,
+        shoppingListId: Number(itemForm.shoppingListId),
+        nameOriginal: itemForm.nameOriginal.trim(),
+        quantity: itemForm.quantity ? Number(itemForm.quantity) : undefined,
+        unitId: itemForm.unitId ? Number(itemForm.unitId) : undefined,
+        notes: itemForm.notes?.trim() || undefined,
       });
-      resetQuickAdd();
-    } finally {
-      setQuickAdding(false);
-    }
-  };
 
-  const handleOpenEdit = (item: ShoppingListItem) => {
-    setEditForm({
-      shoppingListId: item.shoppingListId != null ? String(item.shoppingListId) : '',
-      nameOriginal: item.nameOriginal ?? '',
-      quantity: item.quantity != null ? String(item.quantity) : '',
-      unitId: item.unitId != null ? String(item.unitId) : '',
-      statusId: item.statusId != null ? String(item.statusId) : '',
-      notes: item.notes ?? '',
-    });
+      handleCloseCreate();
+    };
 
-    editModal.open(item);
-  };
+    const handleQuickAdd = async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (activeListId == null) return;
+      if (!quickName.trim()) return;
 
-  const handleCloseEdit = () => {
-    setEditForm(emptyItemForm());
-    editModal.close();
-  };
+      setQuickAdding(true);
+      try {
+        await mutations.createItem({
+          shoppingListId: activeListId,
+          nameOriginal: quickName.trim(),
+          quantity: quickQuantity ? Number(quickQuantity) : undefined,
+          unitId: quickUnitId ? Number(quickUnitId) : undefined,
+          notes: undefined,
+        });
+        resetQuickAdd();
+      } finally {
+        setQuickAdding(false);
+      }
+    };
 
-  const handleEdit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!editModal.data) return;
+    const handleOpenEdit = (item: ShoppingListItem) => {
+      setEditForm({
+        shoppingListId:
+          item.shoppingListId != null ? String(item.shoppingListId) : '',
+        nameOriginal: item.nameOriginal ?? '',
+        quantity: item.quantity != null ? String(item.quantity) : '',
+        unitId: item.unitId != null ? String(item.unitId) : '',
+        statusId: item.statusId != null ? String(item.statusId) : '',
+        notes: item.notes ?? '',
+      });
 
-    await mutations.updateItem(editModal.data.id, {
-      nameOriginal: editForm.nameOriginal.trim() || undefined,
-      quantity: editForm.quantity ? Number(editForm.quantity) : undefined,
-      unitId: editForm.unitId ? Number(editForm.unitId) : undefined,
-      statusId: editForm.statusId ? Number(editForm.statusId) : undefined,
-      notes: editForm.notes?.trim() || undefined,
-    });
+      editModal.open(item);
+    };
 
-    handleCloseEdit();
-  };
+    const handleCloseEdit = () => {
+      setEditForm(emptyItemForm());
+      editModal.close();
+    };
 
-  const handleDelete = async (item: ShoppingListItem) => {
-    await mutations.deleteItem(item.id, item.shoppingListId);
-  };
+    const handleEdit = async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (!editModal.data) return;
 
-  const handleTogglePurchased = async (item: ShoppingListItem) => {
-    await mutations.togglePurchased(item.id, item.shoppingListId, {
-      isPurchased: !item.isPurchased,
-    });
-  };
+      await mutations.updateItem({
+        id: editModal.data.id,
+        listId: editModal.data.shoppingListId,
+        data: {
+          nameOriginal: editForm.nameOriginal.trim() || undefined,
+          quantity: editForm.quantity ? Number(editForm.quantity) : undefined,
+          unitId: editForm.unitId ? Number(editForm.unitId) : undefined,
+          statusId: editForm.statusId ? Number(editForm.statusId) : undefined,
+          notes: editForm.notes?.trim() || undefined,
+        },
+      });
 
-  const handleOpenPurchase = (item: ShoppingListItem) => {
-    setPurchaseForm({
-      ...emptyPurchaseForm(eurCurrencyId),
-      purchaseDate: new Date().toISOString().slice(0, 10),
-    });
-    purchaseModal.open(item);
-  };
+      handleCloseEdit();
+    };
 
-  const handleClosePurchase = () => {
-    setPurchaseForm(emptyPurchaseForm(eurCurrencyId));
-    purchaseModal.close();
-  };
+    const handleDelete = async (item: ShoppingListItem) => {
+      await mutations.deleteItem({
+        id: item.id,
+        listId: item.shoppingListId,
+      });
+    };
 
-  const handlePurchase = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!purchaseModal.data) return;
-    if (activeListId == null) return;
+    const handleTogglePurchased = async (item: ShoppingListItem) => {
+      await mutations.togglePurchased({
+        id: item.id,
+        listId: item.shoppingListId,
+        data: {
+          isPurchased: !item.isPurchased,
+        },
+      });
+    };
 
-    await mutations.addPrice({
-      shoppingListId: activeListId,
-      shoppingListItemId: purchaseModal.data.id,
-      productId: purchaseModal.data.productId,
-      supplierId: purchaseForm.supplierId ? Number(purchaseForm.supplierId) : undefined,
-      purchaseDate: purchaseForm.purchaseDate,
-      price: Number(purchaseForm.price),
-      currencyId: purchaseForm.currencyId ? Number(purchaseForm.currencyId) : undefined,
-      offerFlagId: purchaseForm.offerFlagId ? Number(purchaseForm.offerFlagId) : undefined,
-    });
+    const handleOpenPurchase = (item: ShoppingListItem) => {
+      setPurchaseForm({
+        ...emptyPurchaseForm(eurCurrencyId),
+        purchaseDate: new Date().toISOString().slice(0, 10),
+      });
+      purchaseModal.open(item);
+    };
 
-    handleClosePurchase();
-  };
+    const handleClosePurchase = () => {
+      setPurchaseForm(emptyPurchaseForm(eurCurrencyId));
+      purchaseModal.close();
+    };
 
-  return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
-      <ShoppingItemsToolbar
-        currentListName={currentListName}
-        activeListId={activeListId}
-        searchQuery={searchQuery}
-        filtroStato={filtroStato}
-        onFiltroStatoChange={setFiltroStato}
-        onAddItem={handleOpenCreate}
-      />
+    const handlePurchase = async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (!purchaseModal.data) return;
+      if (activeListId == null) return;
+      if (!purchaseForm.price) return;
 
-      <ShoppingQuickAddBar
-        activeListId={activeListId}
-        unitOptions={unitOptions}
-        quickName={quickName}
-        quickQuantity={quickQuantity}
-        quickUnitId={quickUnitId}
-        onQuickNameChange={setQuickName}
-        onQuickQuantityChange={setQuickQuantity}
-        onQuickUnitChange={setQuickUnitId}
-        onSubmit={handleQuickAdd}
-        loading={quickAdding}
-      />
+      await mutations.addPrice({
+        shoppingListId: activeListId,
+        shoppingListItemId: purchaseModal.data.id,
+        productId: purchaseModal.data.productId,
+        supplierId: purchaseForm.supplierId
+          ? Number(purchaseForm.supplierId)
+          : undefined,
+        purchaseDate: purchaseForm.purchaseDate,
+        price: Number(purchaseForm.price),
+        currencyId: purchaseForm.currencyId
+          ? Number(purchaseForm.currencyId)
+          : undefined,
+        offerFlagId: purchaseForm.offerFlagId
+          ? Number(purchaseForm.offerFlagId)
+          : undefined,
+      });
 
-      <div className={`${shoppingCardClass} min-h-0 flex-1 overflow-hidden p-0`}>
-        <ShoppingItemsList
-          items={filteredItems}
-          loading={loading}
-          containerRef={containerRef}
-          onEdit={handleOpenEdit}
-          onDelete={handleDelete}
-          onToggle={handleTogglePurchased}
-          onPurchase={handleOpenPurchase}
+      handleClosePurchase();
+    };
+
+    return (
+      <div className="flex h-full min-h-0 flex-col gap-3">
+        <ShoppingItemsToolbar
+          currentListName={currentListName}
+          activeListId={activeListId}
+          searchQuery={searchQuery}
+          filtroStato={filtroStato}
+          onFiltroStatoChange={setFiltroStato}
+          onAddItem={handleOpenCreate}
+        />
+
+        <ShoppingQuickAddBar
+          activeListId={activeListId}
+          unitOptions={unitOptions}
+          quickName={quickName}
+          quickQuantity={quickQuantity}
+          quickUnitId={quickUnitId}
+          onQuickNameChange={setQuickName}
+          onQuickQuantityChange={setQuickQuantity}
+          onQuickUnitChange={setQuickUnitId}
+          onSubmit={handleQuickAdd}
+          loading={quickAdding}
+        />
+
+        <div className={`${shoppingCardClass} min-h-0 flex-1 overflow-hidden p-0`}>
+          <ShoppingItemsList
+            items={filteredItems}
+            loading={loading}
+            containerRef={containerRef}
+            onEdit={handleOpenEdit}
+            onDelete={handleDelete}
+            onToggle={handleTogglePurchased}
+            onPurchase={handleOpenPurchase}
+          />
+        </div>
+
+        <ShoppingItemCreateModal
+          open={isCreateOpen}
+          onClose={handleCloseCreate}
+          onSubmit={handleCreate}
+          itemForm={itemForm}
+          setItemForm={setItemForm}
+          activeListId={activeListId}
+          unitOptions={unitOptions}
+        />
+
+        <ShoppingItemEditModal
+          open={editModal.isOpen}
+          onClose={handleCloseEdit}
+          onSubmit={handleEdit}
+          editForm={editForm}
+          setEditForm={setEditForm}
+          unitOptions={unitOptions}
+          itemStatusOptions={itemStatusOptions}
+        />
+
+        <ShoppingPurchaseModal
+          open={purchaseModal.isOpen}
+          onClose={handleClosePurchase}
+          onSubmit={handlePurchase}
+          purchaseForm={purchaseForm}
+          setPurchaseForm={setPurchaseForm}
+          suppliers={suppliers}
+          currencyOptions={currencyOptions}
+          offerFlagOptions={offerFlagOptions}
+          itemName={purchaseModal.data?.nameOriginal ?? ''}
         />
       </div>
-
-      <ShoppingItemCreateModal
-        open={isCreateOpen}
-        onClose={handleCloseCreate}
-        onSubmit={handleCreate}
-        itemForm={itemForm}
-        setItemForm={setItemForm}
-        activeListId={activeListId}
-        unitOptions={unitOptions}
-      />
-
-      <ShoppingItemEditModal
-        open={editModal.isOpen}
-        onClose={handleCloseEdit}
-        onSubmit={handleEdit}
-        editForm={editForm}
-        setEditForm={setEditForm}
-        unitOptions={unitOptions}
-        itemStatusOptions={itemStatusOptions}
-      />
-
-      <ShoppingPurchaseModal
-        open={purchaseModal.isOpen}
-        onClose={handleClosePurchase}
-        onSubmit={handlePurchase}
-        purchaseForm={purchaseForm}
-        setPurchaseForm={setPurchaseForm}
-        suppliers={suppliers}
-        currencyOptions={currencyOptions}
-        offerFlagOptions={offerFlagOptions}
-        itemName={purchaseModal.data?.nameOriginal ?? ''}
-      />
-    </div>
-  );
-});
+    );
+  }
+);
 
 ShoppingItemsColumn.displayName = 'ShoppingItemsColumn';
 

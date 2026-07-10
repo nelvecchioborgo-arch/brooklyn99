@@ -24,6 +24,7 @@ const ShoppingPage: React.FC = () => {
     setActiveListId,
     listsLoading,
     itemsLoading,
+    isInitialLoading,
   } = useShoppingData();
 
   const unitOptions = config?.unitOptions ?? [];
@@ -61,9 +62,6 @@ const ShoppingPage: React.FC = () => {
     if (!activeList) return null;
     return activeList.groupId ? 'Gruppo' : 'Privata';
   }, [activeList]);
-
-  const isInitialLoading =
-    listsLoading || (activeListId !== null && itemsLoading && items.length === 0);
 
   const hasLists = lists.length > 0;
   const hasActiveList = activeListId != null && activeList != null;
@@ -103,7 +101,7 @@ const ShoppingPage: React.FC = () => {
         <aside className="hidden h-full w-[320px] shrink-0 border-r border-slate-200 bg-white xl:block">
           <div className="flex h-full min-h-0 flex-col">
             <ShoppingListsColumn
-              lists={lists ?? []}
+              lists={lists}
               loadingLists={listsLoading}
               activeListId={activeListId}
               setActiveListId={handleSelectList}
@@ -154,7 +152,7 @@ const ShoppingPage: React.FC = () => {
                 <ShoppingBulkPurchasePanel
                   activeList={activeList}
                   items={openItems}
-                  suppliers={suppliers ?? []}
+                  suppliers={suppliers}
                   currencyOptions={currencyOptions}
                   offerFlagOptions={offerFlagOptions}
                 />
@@ -166,7 +164,7 @@ const ShoppingPage: React.FC = () => {
                   activeList={activeList}
                   activeListId={activeListId}
                   items={filteredItems}
-                  suppliers={suppliers ?? []}
+                  suppliers={suppliers}
                   unitOptions={unitOptions}
                   itemStatusOptions={itemStatusOptions}
                   currencyOptions={currencyOptions}
