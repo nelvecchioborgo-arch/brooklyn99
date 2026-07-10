@@ -1,24 +1,25 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { useQueryClient } from '@tanstack/react-query';
 
 // --- IMPORT COMPONENTI ---
 import { type CountdownItem } from '@/components/day/CountdownWidget';
 import { type RoutineItem } from '@/components/day/RoutineColumn';
 import { type HabitItem } from '@/components/day/HabitsBar';
 import NotesSidebar from '@/components/day/NotesSidebar';
+import { SharedAgendaHeader } from '@/components/shared/SharedAgendaHeader';
 
 // --- IMPORT ARCHITETTURA NUOVA ---
 import { useDay } from '@/context/DayContext';
 import { useAgendaDay } from '@/hooks/useAgendaDay';
-import { nomiMesiLungo, getDaysInMonth, getFirstDayIndex, formatDateString } from '@/utils/dateUtils';
-import { mapDayTasksToTasks } from '@/utils/taskUtils';
+import { formatDateString } from '@/utils/dateUtils';
+import { buildTaskTree, filterAndSortTree, type UITask } from '@/utils/taskUtils';
 import { isHabitScheduledForDay } from '@/utils/habitUtils';
-import { BackIcon, ForwardIcon, UndoIcon } from '@/components/shared/utils/Icons';
-import { SmartObiettivoTextarea } from '@/components/day/utils/SmartObiettivoTextarea';
+import { mapDbEventsToCalendarEvents } from '@/utils/eventUtils';
+import { GoalsAndPrioritiesPanel } from '@/components/shared/GoalsAndPrioritiesPanel';
 
-import type { CalendarEvent } from '@/types';
-import type { Task, Event, Habit, RawCountdown, DailyEntry, DaySyncResponse } from '@/types';
+import type { CalendarEvent, NoteVariant } from '@/types';
+import type { Habit, RawCountdown, LocalNoteEntry } from '@/types';
+import { isNoteVariant } from '@/types';
 
 // --- SECTIONS ---
 import { EventsSection } from '@/components/day/views/EventsSection';
@@ -27,30 +28,27 @@ import { CountdownsSection } from '@/components/day/views/CountdownsSection';
 import { HabitsRoutinesSection } from '@/components/day/views/HabitsRoutinesSection';
 
 const DayPage: React.FC = () => {
-  // 1. STATO DELLA DATA (La Nuova Single Source of Truth per la UI)
+  // 1. STATO DELLA DATA
   const navigate = useNavigate();
   const location = useLocation();
 
   // 1. STATO DELLA DATA (La VERA Source of Truth presa dal Context globale!)
-  // Sostituiamo completamente lo useState con i valori del context
   const { dataRiferimento: targetDate, changeDate: setTargetDate } = useDay();
 
   // 2. INTERCETTIAMO LA NAVIGAZIONE DALLA HOMEPAGE
-  // Se arriviamo dal calendario mensile, forziamo il Context ad aggiornarsi
   useEffect(() => {
     if (location.state?.selectedDate) {
       setTargetDate(new Date(location.state.selectedDate));
       // Puliamo lo state della location per evitare re-trigger strani se si ricarica la pagina
       navigate(location.pathname, { 
         replace: true, 
-        state: {} // o null, a seconda di cosa volevi pulire
-        }); 
+        state: {} 
+      }); 
     }
-  }, [location.state?.selectedDate, setTargetDate]);
+  }, [location.state?.selectedDate, setTargetDate, navigate, location.pathname]);
   
   // Creiamo la stringa sicura YYYY-MM-DD per React Query
   const targetDateStr = formatDateString(targetDate);
-  
 
   // 2. IL "CERVELLO" REACT QUERY
   const { 
@@ -73,9 +71,7 @@ const DayPage: React.FC = () => {
     savePriorita
   } = useAgendaDay(targetDateStr);
 
-  // 3. STATI UI
-  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-  const [pickerMonthDate, setPickerMonthDate] = useState<Date>(targetDate);
+  // 3. STATI UI (Rimosso isDatePickerOpen, se ne occupa l'Header!)
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
 
@@ -86,26 +82,17 @@ const DayPage: React.FC = () => {
   const formattedDate = targetDate.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
 
   // --- MAPPATURA DATI (Leggiamo SOLO da dayData) ---
-  const mappedTasks = mapDayTasksToTasks(dayData?.tasks || [], targetDateStr);
+  const taskTree: UITask[] = useMemo(() => {
+    const rawTree = buildTaskTree(dayData?.tasks || []);
+    
+    // 2. Ordiniamo l'albero (es. per priorità) e decidiamo se nascondere quelli completati.
+    // (Sostituisci 'false' con la tua variabile di stato hideCompleted se l'hai definita nel componente)
+    return filterAndSortTree(rawTree, false, 'priority'); 
+  }, [dayData?.tasks]);
 
-  const [initialParentId, setInitialParentId] = useState<number | null>(null);
-
-  const queryClient = useQueryClient();
-
-  const mappedEvents: CalendarEvent[] = (dayData?.events || []).map((e: Event) => ({
-    id: `${e.id}-${e.data_inizio.substring(0,10)}`, 
-    originalId: e.id,
-    time: e.tutto_il_giorno ? undefined : e.data_inizio.substring(11, 16),
-    endTime: (e.tutto_il_giorno || !e.data_fine) ? undefined : e.data_fine.substring(11, 16),
-    title: e.titolo, 
-    category: e.category?.name || e.category_name || 'Generico', 
-    categoryColor: e.category?.colore || '#9ca3af',
-    dateStr: targetDateStr, 
-    description: e.descrizione || undefined, 
-    location: e.luogo || undefined, 
-    tutto_il_giorno: e.tutto_il_giorno, 
-    rrule: e.rrule || undefined
-  }));
+  const mappedEvents: CalendarEvent[] = useMemo(() => {
+    return mapDbEventsToCalendarEvents(dayData?.events || [], targetDateStr);
+  }, [dayData?.events, targetDateStr]);
 
   const mappedCountdowns: CountdownItem[] = (dayData?.countdowns || []).map((c: RawCountdown) => ({
     id: c.id, 
@@ -147,81 +134,76 @@ const DayPage: React.FC = () => {
     });
 
   const mappedNotes = useMemo(() => {
-  if (!dayData?.note) return [];
-  return dayData.note.map((n: DailyEntry & { isNew?: boolean }) => ({ 
-    id: n.id, 
-    text: n.testo, 
-    color: "bg-yellow-200 text-yellow-900", 
-    dateStr: n.data_riferimento,
-    isNew: n.isNew 
-  }));
-}, [dayData?.note]);
+    if (!dayData?.note) return [];
 
-  // --- HANDLER NAVIGAZIONE ---
-  const handlePrevDay = () => { const d = new Date(targetDate); d.setDate(d.getDate() - 1); setTargetDate(d); setPickerMonthDate(d); };
+    return dayData.note
+      // 1. FILTRO DI SICUREZZA: Teniamo solo gli elementi che sono veri Post-it (N1, N2, N3, N4)
+      .filter((n: LocalNoteEntry) => isNoteVariant(n.tipo))
+      // 2. MAPPATURA: Trasformiamo in NoteItem rigorosi
+      .map((n: LocalNoteEntry) => ({ 
+        id: n.id, 
+        text: n.testo, 
+        variant: n.tipo as NoteVariant, // 🪄 Usiamo il codice nativo del DB! Niente più stringhe hardcoded
+        dateStr: n.data_riferimento,
+        isNew: n.isNew 
+      }));
+  }, [dayData?.note]);
 
-  const handleNextDay = () => { const d = new Date(targetDate); d.setDate(d.getDate() + 1); setTargetDate(d); setPickerMonthDate(d); };
-
-  const handleResetToday = () => { const d = new Date(); setTargetDate(d); setPickerMonthDate(d); };
-  
-  const handleChangeDate = (d: Date) => { setTargetDate(d); setIsDatePickerOpen(false); };
-
-  // --- HANDLER AZIONI (Ora sono leggerissimi grazie all'Hook!) ---
-  const handleToggleTask = (id: number) => {
-    const isDone = dayData?.tasks.find((t: Task) => t.id === id)?.fatto || false;
-    toggleTask({ id, isDone }); 
+  // --- HANDLER NAVIGAZIONE (Molto più snelli ora) ---
+  const handlePrevDay = () => { 
+    const d = new Date(targetDate); 
+    d.setDate(d.getDate() - 1); 
+    setTargetDate(d); 
   };
 
-  const handleAddNote = () => {
-  const newId = Date.now();
-  setEditingNoteId(newId); // Focus automatico
+  const handleNextDay = () => { 
+    const d = new Date(targetDate); 
+    d.setDate(d.getDate() + 1); 
+    setTargetDate(d); 
+  };
 
-  // 🪄 Usiamo 'daySync' e la tipizzazione corretta!
-  queryClient.setQueryData(['daySync', targetDateStr], (oldData: DaySyncResponse | undefined) => {
-    if (!oldData) return oldData;
-    return {
-      ...oldData,
-      note: [
-        { id: newId, testo: "", data_riferimento: targetDateStr, isNew: true },
-        ...(oldData.note || [])
-      ]
-    };
-  });
-};
+  const handleResetToday = () => { 
+    setTargetDate(new Date()); 
+  };
 
-const handleAutoSaveNote = (id: number, text: string, isNew?: boolean) => {
-  // 1. Aggiornamento istantaneo nella UI
-  queryClient.setQueryData(['daySync', targetDateStr], (oldData: DaySyncResponse | undefined) => {
-    if (!oldData) return oldData;
-    return {
-      ...oldData,
-      note: (oldData.note || []).map((n: DailyEntry & { isNew?: boolean }) => 
-        n.id === id ? { ...n, testo: text, isNew: false } : n
-      )
-    };
-  });
+  // --- HANDLER AZIONI ---
+  const handleToggleTask = (id: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const taskCorrente = dayData?.tasks.find(t => t.id === id); 
+    if (!taskCorrente) return;
+    toggleTask({ id, isDone: !taskCorrente.fatto }); 
+  };
 
-  // 2. Salviamo fisicamente! (Chiama la saveNote del tuo hook)
-  saveNote({ id: isNew ? undefined : id, text: text, dateStr: targetDateStr });
-};
+  const handleAddNote = (variant: NoteVariant) => {
+    const tempId = Date.now();
+    // Chiamiamo direttamente la mutazione indicando che è nuova
+    saveNote({
+      id: tempId,
+      dateStr: targetDateStr,
+      text: "", 
+      variant,
+      isNew: true
+    });
+    setEditingNoteId(tempId);
+  };
 
-const handleDeleteNote = (id: number, isNew?: boolean) => {
-  // 1. Rimuovi istantaneamente dalla UI
-  queryClient.setQueryData(['daySync', targetDateStr], (oldData: DaySyncResponse | undefined) => {
-    if (!oldData) return oldData;
-    return {
-      ...oldData,
-      note: (oldData.note || []).filter((n: DailyEntry & { isNew?: boolean }) => n.id !== id)
-    };
-  });
+  const handleAutoSaveNote = (id: number, text: string, variant: NoteVariant, isNew?: boolean) => {
+    // Tutta la logica ottimistica è ora gestita nell'hook!
+    saveNote({ 
+      id, 
+      text, 
+      dateStr: targetDateStr,
+      variant,
+      isNew 
+    });
+  };
 
-  // 2. Chiamata al server solo se non era un post-it appena creato
-  if (!isNew) {
+  const handleDeleteNote = (id: number, isNew?: boolean) => {
+    // Se era una nota appena creata e mai scritta, possiamo forzare una rimozione ottimistica o usare il delete 
+    // Siccome ora gestiamo isNew bene nel context, chiamiamo deleteNote.
     deleteNote(id); 
-  }
-};
+  };
 
-  // Se i dati stanno caricando la prima volta
   if (isLoading && !dayData) return <div className="flex h-full items-center justify-center font-bold text-gray-500 animate-pulse">Caricamento agenda...</div>;
   
   return (
@@ -229,116 +211,29 @@ const handleDeleteNote = (id: number, isNew?: boolean) => {
       
       {/* SEZIONE TOP */}
       <div className="flex flex-col xl:flex-row gap-6 shrink-0 items-stretch">
-        <div className="xl:w-1/4 flex flex-col justify-center items-center relative py-2 z-30"> {/* Aumentato z-index a 30 per sicurezza */}
-          <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-1">Agenda</h2>
-          
-          {/* NUOVO CONTENITORE: Larghezza fissa (w-[280px] o w-[320px]) e justify-between */}
-          <div className="flex items-center justify-between w-[265px] xl:w-[305px] relative mx-auto z-40">
-            
-            <button 
-              onClick={handlePrevDay} 
-              className="relative z-50 text-blue-600 hover:text-blue-800 transition-transform hover:-translate-x-1 focus:outline-none p-2 shrink-0 bg-transparent"
-            >
-              <BackIcon className="w-8 h-8" />
-            </button>
+        
+        {/* HEADER ASTRATTO (Sostituisce il vecchio blocco frecce+datepicker) */}
+        <SharedAgendaHeader 
+          title={displayName} 
+          subtitle={formattedDate} 
+          currentDate={targetDate} 
+          isToday={isToday} 
+          onPrev={handlePrevDay} 
+          onNext={handleNextDay} 
+          onResetToday={handleResetToday} 
+          onChangeDate={setTargetDate} // Passiamo direttamente il setter del Context!
+          viewMode="day"
+        />
 
-            {/* Testo centrale svincolato dalle frecce */}
-            <div className="flex-1 flex justify-center relative">
-              <h1 
-                onClick={() => { setPickerMonthDate(targetDate); setIsDatePickerOpen(!isDatePickerOpen); }} 
-                className="text-3xl xl:text-4xl font-extrabold text-gray-900 uppercase cursor-pointer hover:text-blue-600 transition-colors select-none text-center"
-              >
-                {displayName}
-              </h1>
-              
-              {/* Il DatePicker rimane invariato */}
-              {isDatePickerOpen && (
-                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-2xl border border-gray-100 p-4 w-64 animate-fadeIn z-50">
-                  <div className="flex justify-between items-center mb-4 px-2">
-                    <button type="button" onClick={() => setPickerMonthDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))} className="text-gray-400 hover:text-gray-800 transition-colors">
-                      <BackIcon className="w-4 h-4" />
-                    </button>
-                    <span className="font-bold text-gray-800 text-sm uppercase">{nomiMesiLungo[pickerMonthDate.getMonth()]} {pickerMonthDate.getFullYear()}</span>
-                    <button type="button" onClick={() => setPickerMonthDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))} className="text-gray-400 hover:text-gray-800 transition-colors">
-                      <ForwardIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-7 gap-1 text-center mb-2">{['L', 'M', 'M', 'G', 'V', 'S', 'D'].map((day, i) => <div key={i} className="text-[10px] font-bold text-gray-400">{day}</div>)}</div>
-                  <div className="grid grid-cols-7 gap-1">
-                    {Array.from({ length: getFirstDayIndex(pickerMonthDate.getFullYear(), pickerMonthDate.getMonth()) }).map((_, i) => <div key={`empty-${i}`} className="p-1"></div>)}
-                    {Array.from({ length: getDaysInMonth(pickerMonthDate.getFullYear(), pickerMonthDate.getMonth()) }).map((_, i) => {
-                      const dayNum = i + 1;
-                      const isSelected = targetDate.getDate() === dayNum && targetDate.getMonth() === pickerMonthDate.getMonth() && targetDate.getFullYear() === pickerMonthDate.getFullYear();
-                      return (
-                        <button key={dayNum} onClick={() => { handleChangeDate(new Date(pickerMonthDate.getFullYear(), pickerMonthDate.getMonth(), dayNum)); setIsDatePickerOpen(false); }} className={`w-7 h-7 flex mx-auto items-center justify-center rounded-full text-xs font-medium transition-colors ${isSelected ? 'bg-blue-100 text-blue-700 font-bold shadow-sm' : 'text-gray-700 hover:bg-gray-100'}`}>{dayNum}</button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button 
-              onClick={handleNextDay} 
-              className="relative z-50 text-blue-600 hover:text-blue-800 transition-transform hover:translate-x-1 focus:outline-none p-2 shrink-0 bg-transparent"
-            >
-              <ForwardIcon className="w-8 h-8" />
-            </button>
-          </div>
-          
-          {/* Il resto rimane invariato */}
-          <p className="text-lg xl:text-xl font-medium text-gray-500 mt-1">{formattedDate}</p>
-          <div className="h-8 mt-2 flex items-center justify-center w-full">
-            {!isToday && (
-              <button onClick={handleResetToday} className="p-1.5 text-black hover:bg-gray-200 hover:text-black rounded-full transition-all animate-fadeIn focus:outline-none" title="Ritorna ad Oggi">
-                <UndoIcon className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-          {isDatePickerOpen && <div className="fixed inset-0 z-40" onClick={() => setIsDatePickerOpen(false)}></div>}
-        </div>
-
-        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col flex-1 xl:flex-row gap-6 py-5 z-10`}>
-          <div className="flex-1 xl:border-r border-gray-200 xl:pr-8 flex flex-col justify-center relative h-full">
-            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 shrink-0">Obiettivo del Giorno</h3>
-            {(() => {
-              const obiettivoObj = dayData?.obiettivi?.[0];
-              const obiettivoTesto = obiettivoObj?.testo || "";
-              
-              return (
-                <SmartObiettivoTextarea 
-                  key={`obiettivo-${obiettivoObj?.id || 'empty'}-${targetDateStr}`}
-                  initialText={obiettivoTesto}
-                  onSave={(nuovoTesto) => saveObiettivo({ id: obiettivoObj?.id, text: nuovoTesto })}
-                />
-              );
-            })()}
-          </div>
-          <div className="flex-1 flex flex-col justify-center min-w-[280px]">
-            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Top 3 Priorities</h3>
-            <ul className="space-y-2.5">
-              {[0, 1, 2].map(index => {
-                // 🪄 ESTRAIAMO L'OGGETTO E POI IL TESTO IN MODO SICURO
-                const prioritaObj = dayData?.priorita?.[index];
-                const prioritaTesto = prioritaObj?.testo || ""; 
-                
-                return (
-                  <li key={`pri-row-${index}`} className="flex items-center gap-3">
-                    <span className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold shrink-0">{index + 1}</span>
-                    <input 
-                      key={`priorita-${index}-${prioritaObj?.id || 'empty'}-${targetDateStr}`} 
-                      type="text" 
-                      defaultValue={prioritaTesto} 
-                      onBlur={(e) => savePriorita({ id: prioritaObj?.id, text: e.target.value })} 
-                      placeholder={`Priorità ${index + 1}`} 
-                      className="w-full text-sm font-medium text-gray-700 border-none focus:ring-0 p-0 bg-transparent placeholder-gray-300" 
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </div>
+        <GoalsAndPrioritiesPanel
+          goalTitle="Obiettivo del Giorno"
+          prioritiesTitle="Top 3 Priorità"
+          dateKey={targetDateStr}
+          goalEntry={dayData?.obiettivi?.[0]}
+          prioritiesEntries={dayData?.priorita}
+          onSaveGoal={(nuovoTesto) => saveObiettivo({ id: dayData?.obiettivi?.[0]?.id, text: nuovoTesto })}
+          onSavePriority={(id, testo) => savePriorita({ id, text: testo })}
+        />
       </div>
 
       {/* SEZIONE CENTRALE */}
@@ -355,7 +250,7 @@ const handleDeleteNote = (id: number, isNew?: boolean) => {
 
         <div className="xl:col-span-4 flex flex-col gap-3 h-full min-h-0 w-full min-w-0">
           <TasksSection 
-              tasks={mappedTasks} 
+              tasks={taskTree} 
               targetDate={targetDate} 
               onToggleTask={handleToggleTask} 
             />
@@ -390,8 +285,6 @@ const handleDeleteNote = (id: number, isNew?: boolean) => {
         onOpen={() => setIsNotesOpen(true)} 
         onClose={() => setIsNotesOpen(false)}
         onAddNote={handleAddNote} 
-        
-        // Le nuove prop pulite!
         onAutoSaveNote={handleAutoSaveNote}
         onDeleteNote={handleDeleteNote}
         clearEditingNoteId={() => setEditingNoteId(null)}

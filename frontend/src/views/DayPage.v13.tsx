@@ -32,7 +32,7 @@ import { BackIcon, ForwardIcon, UndoIcon } from '@/components/shared/utils/Icons
 import { SmartObiettivoTextarea } from '@/components/day/utils/SmartObiettivoTextarea';
 import { NotesSection } from '@/components/day/NotesSections';
 
-import type { CalendarEvent, DaySyncResponse } from '@/types';
+import type { CalendarEvent, SyncDayResponse } from '@/types';
 import type { Task, Event, Habit, RawCountdown, NoteItem, DailyEntry } from '@/types';
 import { useLocation } from 'react-router-dom';
 

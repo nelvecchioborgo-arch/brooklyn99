@@ -1,6 +1,6 @@
 // frontend/src/components/shared/utils/DatePicker.tsx
 import React, { useState, useEffect } from 'react';
-import { nomiMesiLungo, pad, getDaysInMonth, getFirstDayIndex, formatToItalianShortDate } from '@/utils/dateUtils';
+import { nomiMesiLungo, nomiMesiCorto, pad, getDaysInMonth, getFirstDayIndex, formatToItalianShortDate } from '@/utils/dateUtils';
 import { useOutsideClick } from '@/hooks/useOutsideClick';
 import { CalendarIcon, BackIcon, ForwardIcon } from './Icons';
 
@@ -13,6 +13,7 @@ interface DatePickerProps {
   placeholder?: string;
   align?: 'left' | 'right' | 'center';
   customTrigger?: React.ReactNode; 
+  selectionMode?: 'day' | 'week' | 'month';
 }
 
 const DatePicker: React.FC<DatePickerProps> = ({ 
@@ -23,7 +24,8 @@ const DatePicker: React.FC<DatePickerProps> = ({
   onToggle, 
   placeholder = 'Seleziona data', 
   align = 'left',
-  customTrigger 
+  customTrigger,
+  selectionMode = 'day'
 }) => {
   const [pickerMonthDate, setPickerMonthDate] = useState<Date>(new Date());
   const [openUpwards, setOpenUpwards] = useState<boolean>(false);
@@ -32,7 +34,6 @@ const DatePicker: React.FC<DatePickerProps> = ({
     if (isOpen) onClose();
   });
 
-  // Quando viene passato un valore esistente, inizializza il calendario in quel mese
   useEffect(() => {
     if (isOpen) {
       if (value) {
@@ -48,18 +49,54 @@ const DatePicker: React.FC<DatePickerProps> = ({
     if (isOpen && wrapperRef.current) {
       const rect = wrapperRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
-      // Se ci sono meno di 320px sotto, il calendario non ci sta: apri verso l'alto
       setOpenUpwards(spaceBelow < 320);
     }
   }, [isOpen, wrapperRef]);
 
   const year = pickerMonthDate.getFullYear();
   const month = pickerMonthDate.getMonth();
+  
+  // Data di "oggi" per calcolare l'indicatore ambra "pieno"
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth();
+  const currentDay = today.getDate();
+
+  // --- LOGICA DI RAGGRUPPAMENTO PER SETTIMANE ---
+  const firstDayIdx = getFirstDayIndex(year, month);
+  const daysInMo = getDaysInMonth(year, month);
+  const cells: (number | null)[] = [
+    ...Array(firstDayIdx).fill(null),
+    ...Array.from({ length: daysInMo }, (_, i) => i + 1)
+  ];
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+  const weeks: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    weeks.push(cells.slice(i, i + 7));
+  }
+
+  // Helper per la navigazione condizionale (Anno vs Mese)
+  const handleBack = () => {
+    if (selectionMode === 'month') {
+      setPickerMonthDate(new Date(year - 1, month, 1));
+    } else {
+      setPickerMonthDate(new Date(year, month - 1, 1));
+    }
+  };
+
+  const handleForward = () => {
+    if (selectionMode === 'month') {
+      setPickerMonthDate(new Date(year + 1, month, 1));
+    } else {
+      setPickerMonthDate(new Date(year, month + 1, 1));
+    }
+  };
 
   return (
     <div className="relative flex justify-center" ref={wrapperRef}>
       
-      {/* RENDER CONDIZIONALE DEL TRIGGER */}
       {customTrigger ? (
         <div 
           onClick={(e: React.MouseEvent<HTMLDivElement>) => { e.stopPropagation(); onToggle(); }} 
@@ -79,7 +116,6 @@ const DatePicker: React.FC<DatePickerProps> = ({
         </div>
       )}
       
-      {/* POPUP CALENDARIO */}
       {isOpen && (
         <div 
           className={`absolute z-[100] bg-white rounded-xl shadow-xl border border-gray-100 p-4 w-64 animate-fadeIn ${
@@ -88,37 +124,118 @@ const DatePicker: React.FC<DatePickerProps> = ({
           onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
         >
           <div className="flex justify-between items-center mb-4 px-2">
-            <button type="button" onClick={() => setPickerMonthDate(new Date(year, month - 1, 1))} className="text-gray-400 hover:text-gray-800 transition-colors focus:outline-none">
+            <button type="button" onClick={handleBack} className="text-gray-400 hover:text-gray-800 transition-colors focus:outline-none">
               <BackIcon className="w-4 h-4" />
             </button>
-            <span className="font-bold text-gray-800 text-sm">{nomiMesiLungo[month]} {year}</span>
-            <button type="button" onClick={() => setPickerMonthDate(new Date(year, month + 1, 1))} className="text-gray-400 hover:text-gray-800 transition-colors focus:outline-none">
+            <span className="font-bold text-gray-800 text-sm">
+              {selectionMode === 'month' ? year : `${nomiMesiLungo[month]} ${year}`}
+            </span>
+            <button type="button" onClick={handleForward} className="text-gray-400 hover:text-gray-800 transition-colors focus:outline-none">
               <ForwardIcon className="w-4 h-4" />
             </button>
           </div>
           
-          <div className="grid grid-cols-7 gap-1 text-center mb-2">
-            {['L', 'M', 'M', 'G', 'V', 'S', 'D'].map((day, i) => <div key={i} className="text-[10px] font-bold text-gray-400">{day}</div>)}
-          </div>
-          
-          <div className="grid grid-cols-7 gap-1">
-            {Array.from({ length: getFirstDayIndex(year, month) }).map((_, i) => <div key={`empty-${i}`} className="p-1"></div>)}
-            {Array.from({ length: getDaysInMonth(year, month) }).map((_, i) => {
-              const dayNum = i + 1;
-              const dateStr = `${year}-${pad(month + 1)}-${pad(dayNum)}`;
-              const isSelected = value === dateStr;
-              return (
-                <button 
-                  key={dayNum} 
-                  type="button" 
-                  onClick={() => { onChange(dateStr); onClose(); }} 
-                  className={`w-7 h-7 flex mx-auto items-center justify-center rounded-full text-xs font-medium transition-colors focus:outline-none ${isSelected ? 'bg-blue-100 text-blue-700 font-bold shadow-sm' : 'text-gray-700 hover:bg-gray-100'}`}
-                >
-                  {dayNum}
-                </button>
-              );
-            })}
-          </div>
+          {selectionMode === 'month' ? (
+            // GRIGLIA MENSILE
+            <div className="grid grid-cols-4 gap-y-3 gap-x-1 mt-2">
+              {nomiMesiCorto.map((mese, idx) => {
+                const isActive = value.startsWith(`${year}-${pad(idx + 1)}-`);
+                const isCurrentMonth = currentYear === year && currentMonth === idx;
+                
+                return (
+                  <div key={mese} className="flex justify-center items-center">
+                    <button 
+                      type="button"
+                      onClick={() => { 
+                        onChange(`${year}-${pad(idx + 1)}-01`); 
+                        onClose(); 
+                      }} 
+                      className={`w-11 h-11 flex justify-center items-center rounded-full text-xs font-bold transition-all focus:outline-none ${
+                        isActive 
+                          ? 'bg-blue-100 text-blue-700' 
+                          : isCurrentMonth
+                            ? 'bg-amber-500 text-white shadow-md ring-4 ring-amber-100 font-extrabold hover:bg-amber-600'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      }`}
+                    >
+                      {mese}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            // GRIGLIA GIORNI / SETTIMANE
+            <>
+              <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                {['L', 'M', 'M', 'G', 'V', 'S', 'D'].map((day, i) => <div key={i} className="text-[10px] font-bold text-gray-400">{day}</div>)}
+              </div>
+              
+              <div className="flex flex-col gap-1">
+                {weeks.map((week, weekIdx) => {
+                  const isWeekSelected = selectionMode === 'week' && week.some(day => {
+                    if (day === null) return false;
+                    return value === `${year}-${pad(month + 1)}-${pad(day)}`;
+                  });
+
+                  return (
+                    <div 
+                      key={`week-${weekIdx}`} 
+                      className={`grid grid-cols-7 gap-1 rounded-lg py-0.5 transition-colors ${
+                        selectionMode === 'week' 
+                          ? (isWeekSelected ? 'bg-blue-100 shadow-sm' : 'hover:bg-blue-50 cursor-pointer') 
+                          : ''
+                      }`}
+                      onClick={() => {
+                        if (selectionMode === 'week') {
+                          const firstValidDay = week.find(day => day !== null);
+                          if (firstValidDay !== undefined && firstValidDay !== null) {
+                            onChange(`${year}-${pad(month + 1)}-${pad(firstValidDay)}`);
+                            onClose();
+                          }
+                        }
+                      }}
+                    >
+                      {week.map((dayNum, dayIdx) => {
+                        if (dayNum === null) return <div key={`empty-${weekIdx}-${dayIdx}`} className="p-1"></div>;
+                        
+                        const dateStr = `${year}-${pad(month + 1)}-${pad(dayNum)}`;
+                        const isSelectedDay = value === dateStr;
+                        const isToday = currentYear === year && currentMonth === month && currentDay === dayNum;
+                        
+                        return (
+                          <button 
+                            key={dayNum} 
+                            type="button" 
+                            onClick={(e) => { 
+                              if (selectionMode === 'week') e.stopPropagation();
+                              onChange(dateStr); 
+                              onClose(); 
+                            }} 
+                            className={`w-7 h-7 flex mx-auto items-center justify-center rounded-full text-xs font-medium transition-colors focus:outline-none ${
+                              selectionMode === 'week'
+                                ? (isWeekSelected 
+                                    ? 'text-blue-800 font-bold' 
+                                    : isToday 
+                                      ? 'bg-amber-500 text-white shadow-md ring-4 ring-amber-100 font-extrabold hover:bg-amber-600'
+                                      : 'text-gray-700 hover:bg-white hover:shadow-sm')
+                                : (isSelectedDay 
+                                    ? 'bg-blue-100 text-blue-700 font-bold shadow-sm' 
+                                    : isToday 
+                                      ? 'bg-amber-500 text-white shadow-md ring-4 ring-amber-100 font-extrabold hover:bg-amber-600'
+                                      : 'text-gray-700 hover:bg-gray-100')
+                            }`}
+                          >
+                            {dayNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

@@ -46,8 +46,12 @@ export interface TaskSummary {
   data_fatto?: string | null;
 }
 
+export interface UITask extends Task {
+  subtasks: UITask[]; 
+}
+
 // --- EVENTI ---
-export interface Event {
+export interface DbEvent {
   id: number;
   titolo: string;
   descrizione?: string | null;
@@ -87,6 +91,43 @@ export interface DailyEntry {
   testo: string;
   immagine_url?: string | null;
 }
+export interface LocalNoteEntry extends DailyEntry {
+  isNew?: boolean;
+}
+
+export interface MoodEvent {
+  id: number;
+  title: string;
+  type: MoodEventType;
+  date: string;
+}
+
+// Struttura del payload per la creazione
+export interface CreateMoodPayload {
+  tipo: MoodEventType;
+  testo: string;
+  data_riferimento: string;
+}
+
+export type MoodEventType = 'EP' | 'EN';
+
+export type DailyEntryType = 'OD' | 'PD' | 'OW' | 'PW' | MoodEventType | NoteVariant;
+
+// --- NOTE ---
+
+export type NoteVariant = 'N1' | 'N2' | 'N3' | 'N4';
+
+export interface NoteItem {
+  id: number;
+  text: string;
+  dateStr: string;
+  variant: NoteVariant;
+  isNew?: boolean; 
+}
+
+export const isNoteVariant = (tipo: string): tipo is NoteVariant => {
+  return ['N1', 'N2', 'N3', 'N4'].includes(tipo);
+};
 
 export interface Countdown {
   id: number;
@@ -160,23 +201,14 @@ export interface SaveHabitPayload {
   data: HabitFormData; 
 }
 
-// --- NOTE ---
-
-export interface NoteItem {
-  id: number;
-  text: string;
-  dateStr: string;
-  color: string;
-  isNew?: boolean; 
-}
 
 // ---- SYNC ----
 
 
-export interface DaySyncResponse {
+export interface SyncDayResponse {
   tasks: Task[];
   habits: Habit[];
-  events?: Event[];
+  events?: DbEvent[];
   countdowns?: Countdown[];
   obiettivi?: DailyEntry[];
   priorita?: DailyEntry[];
@@ -191,11 +223,9 @@ export interface SyncWeekResponse {
   eventi_positivi: DailyEntry[];
   eventi_negativi: DailyEntry[];
   note: DailyEntry[];
-  events: Event[]; 
+  events: DbEvent[]; 
   tasks: Task[];   
 }
-
-export type DailyEntryType = 'OD' | 'PD' | 'N1' | 'OS' | 'PS' | 'EP' | 'EN';
 
 export const CategoryGenre = {
   TASKS: 1,

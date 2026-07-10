@@ -1,12 +1,11 @@
 // src/components/day/views/TasksSection.tsx
 import React from 'react';
-import TaskColumn from '@/components/shared/TaskColumn';
-import { useModal } from '@/hooks/useModals';
-import type { TaskSummary } from '@/types';
+import TaskColumn from '@/components/shared/tasks/TaskColumn';
+import type { UITask } from '@/utils/taskUtils';
 import { useTaskModals } from '@/context/TaskModalContext';
 
 interface TasksSectionProps {
-  tasks: TaskSummary[];
+  tasks: UITask[];
   targetDate: Date;
   onToggleTask: (id: number) => void;
 }

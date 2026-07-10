@@ -7,6 +7,7 @@ import WeeklyFocusPopup from '@/components/dashboard/WeeklyFocusPopup';
 import { pad } from '@/utils/dateUtils';
 import { getEventSegmentsForDay, type DayEventItem } from '@/utils/eventUtils';
 import { getHexColor, getDynamicStyles } from '@/utils/uiUtils';
+import { AllDayEventsGroup } from '@/components/shared/utils/AllDayEventsGroup';
 
 interface WeekGridProps {
   state: CalendarState;
@@ -26,18 +27,16 @@ interface PositionedEvent extends DayEventItem {
 
 const parsePercent = (val: string): number => parseFloat(val.replace('%', '')) || 0;
 
+// La funzione aggiornata con i tre controlli per la freccia
 const formatHoverTime = (start?: string, end?: string): string => {
   if (start && end) return `${start} → ${end}`;
   if (!start && end) return `→ ${end}`;
-  if (start && !end) return `${start} →`;
+  if (start && !end) return `${start}`; // <-- Niente più freccia qui
   return '';
 };
 
 // Helper Type-Safe per estrarre il colore senza usare "any"
-// Helper Type-Safe per estrarre il colore senza usare "any"
 const getTaskColorHex = (task: Task): string => {
-  // Il doppio cast "as unknown as..." è la tecnica standard di TS 
-  // per bypassare l'errore TS2352 mantenendo la type-safety (niente any!)
   const t = task as unknown as Record<string, unknown>;
   const cat = t.category as Record<string, unknown> | undefined;
   
@@ -261,7 +260,7 @@ const WeekGrid: React.FC<WeekGridProps> = ({
                 setIsSelectingDate(false); 
                 setHoveredDay(day.dateStr);
                 const rect = e.currentTarget.getBoundingClientRect();
-                setPopupRect({ left: rect.left, width: rect.width });
+                setPopupRect(rect);
               }}
               onMouseLeave={() => { setHoveredDay(null); setPopupRect(null); }}
               className={`bg-white relative border-l border-gray-100 flex flex-col group/col cursor-crosshair ${isDetailed ? 'min-w-0' : ''}`}
@@ -327,28 +326,31 @@ const WeekGrid: React.FC<WeekGridProps> = ({
               ) : (
                 // --- WEEKPAGE (DETAILED): EVENTI A TEMPO E TUTTO IL GIORNO ---
                 <>
+                  {/* ETICHETTE EVENTI TUTTO IL GIORNO (In cima alla colonna del giorno) */}
+                  {multiDayEvents.length > 0 && (
+                    <div className="absolute top-0.5 left-0.5 right-0.5 z-[20] pointer-events-auto">
+                      <AllDayEventsGroup 
+                        events={multiDayEvents.map(m => m.ev)} 
+                        onSelectEvent={onSelectEvent} 
+                        limit={2} 
+                      />
+                    </div>
+                  )}
+
+                  {/* SFONDO BACKGROUND EVENTI TUTTO IL GIORNO */}
                   {multiDayEvents.map(({ ev, seg }, idx) => {
                     const hex = getHexColor(ev.categoryColor);
-                    const dyn = getDynamicStyles(hex);
-                    
                     return (
                       <div 
-                        key={`allday-detailed-${ev.id}-${idx}`}
-                        className="absolute w-[80%] left-[10%] rounded-[3px] pointer-events-auto group"
-                        style={{ top: seg.top, height: seg.height, zIndex: 5 + idx }}
-                      >
-                        <div className="absolute inset-0 rounded-[3px] pointer-events-none" style={{ backgroundColor: dyn.bg }} />
-                        <div 
-                          onClick={(e: React.MouseEvent<HTMLDivElement>) => { e.stopPropagation(); onSelectEvent(ev); }}
-                          className="relative w-full min-h-[14px] rounded-[3px] bg-white flex flex-col text-[9px] sm:text-[10px] leading-[1.1] shadow-[0_1px_2px_rgba(0,0,0,0.1)] border-l-[2.5px] cursor-pointer overflow-hidden transition-all group-hover:z-50 group-hover:shadow-md group-hover:brightness-95"
-                          style={{ borderColor: hex, marginTop: `${idx * 16}px` }}
-                        >
-                          <div className="absolute inset-0 z-0 pointer-events-none" style={{ backgroundColor: dyn.bg }} />
-                          <div className="relative z-10 font-bold truncate px-1 pt-[1px]" style={{ color: dyn.text || '#1f2937' }}>
-                            {ev.title || 'Senza Titolo'}
-                          </div>
-                        </div>
-                      </div>
+                        key={`allday-bg-${ev.id}-${idx}`}
+                        className="absolute w-[80%] left-[10%] rounded-md pointer-events-none"
+                        style={{ 
+                          top: seg.top, 
+                          height: seg.height, 
+                          backgroundColor: getDynamicStyles(hex).bg,
+                          zIndex: 5
+                        }}
+                      />
                     );
                   })}
 
@@ -378,13 +380,17 @@ const WeekGrid: React.FC<WeekGridProps> = ({
                           </div>
                         </div>
 
-                        {/* TOOLTIP */}
-                        <div className="hidden group-hover:flex flex-col absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 bg-gray-800 text-white rounded shadow-lg items-center whitespace-nowrap z-[60] pointer-events-none">
-                          <span className="text-[10px] font-bold">{ev.title || 'Senza Titolo'}</span>
+                        {/* TOOLTIP Completamente opaco, text-wrapping e larghezza massima controllata */}
+                        <div className="hidden group-hover:flex flex-col absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded shadow-[0_4px_12px_rgba(0,0,0,0.4)] items-center z-[9999] pointer-events-none w-max max-w-[110px] sm:max-w-[140px]">
+                          <span className="text-[10px] text-white font-bold text-center break-words w-full">
+                            {ev.title || 'Senza Titolo'}
+                          </span>
                           {hoverTimeText && (
-                            <span className="text-gray-300 text-[9px] mt-[1px]">{hoverTimeText}</span>
+                            <span className="text-slate-300 text-[9px] mt-[2px] font-medium tracking-wide whitespace-nowrap">
+                              {hoverTimeText}
+                            </span>
                           )}
-                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-gray-800"></div>
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-slate-900"></div>
                         </div>
                       </div>
                     );
@@ -392,91 +398,79 @@ const WeekGrid: React.FC<WeekGridProps> = ({
                 </>
               )}
 
-              {/* TASKS IN SCADENZA CON LOGICA COLLASSABILE E ORDINAMENTO */}
+              {/* TASKS IN SCADENZA CON LOGICA A FRECCIA (Dal basso) */}
               {isDetailed && dayTasks.length > 0 && (
-                <div className="absolute bottom-1 left-1 right-1 flex flex-col gap-0.5 z-20 max-h-[50%] overflow-y-auto custom-scrollbar pointer-events-auto bg-transparent">
+                <div className="absolute bottom-1 left-1 right-1 flex flex-col justify-end items-center gap-1.5 z-[60] pointer-events-none">
                   {(() => {
                     const isExpanded = expandedTasksDays[day.dateStr] || false;
-                    const hasMore = dayTasks.length > 3;
-                    const visibleTasks = hasMore && !isExpanded ? dayTasks.slice(0, 2) : dayTasks;
 
                     return (
                       <>
-                        {/* 1. Pulsante "Mostra altre" in cima -> FRECCIA IN ALTO */}
-                        {hasMore && !isExpanded && (
-                          <div className="w-full flex justify-center pb-[1px]">
-                            <button 
-                              onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); toggleExpandTasks(day.dateStr); }}
-                              className="w-[18px] h-[18px] bg-white border border-gray-300 rounded-full flex justify-center items-center cursor-pointer shadow-sm hover:bg-gray-100 hover:border-gray-400 transition-colors focus:outline-none"
-                              title={`Mostra altre ${dayTasks.length - 2} task`}
-                            >
-                              <svg className="w-2.5 h-2.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
-                              </svg>
-                            </button>
+                        {/* Box Liste Task: appare SOLO se espanso, si sovrappone agli eventi */}
+                        {isExpanded && (
+                          <div className="w-full max-h-[250px] overflow-y-auto custom-scrollbar pointer-events-auto bg-gray-50/90 backdrop-blur-md p-1.5 rounded-lg shadow-xl border border-gray-200 flex flex-col gap-1 transition-all">
+                            {dayTasks.map(task => {
+                              const taskColor = getTaskColorHex(task);
+                              return (
+                                <div 
+                                  key={task.id} 
+                                  onClick={(e: React.MouseEvent<HTMLDivElement>) => { 
+                                    e.stopPropagation(); 
+                                    onSelectTask?.(task); 
+                                  }}
+                                  className={`text-[8.5px] sm:text-[9.5px] rounded px-1.5 py-[3px] border-l-[3px] shadow-sm flex items-center gap-1.5 cursor-pointer transition-all overflow-hidden shrink-0 hover:brightness-95 hover:shadow-md ${
+                                    task.fatto 
+                                      ? 'bg-gray-100 text-gray-400 line-through opacity-70' 
+                                      : 'bg-white text-gray-800 font-medium'
+                                  }`}
+                                  style={{ 
+                                    borderColor: task.fatto ? '#9ca3af' : taskColor 
+                                  }}
+                                >
+                                  <button 
+                                    type="button"
+                                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      if (onToggleTask) {
+                                        onToggleTask(task, !task.fatto);
+                                      }
+                                    }}
+                                    style={{
+                                      backgroundColor: task.fatto ? '#9ca3af' : '#ffffff',
+                                      borderColor: task.fatto ? '#9ca3af' : '#d1d5db',
+                                    }}
+                                    className={`shrink-0 w-3 h-3 rounded-[2px] border flex items-center justify-center transition-colors focus:outline-none cursor-pointer hover:border-gray-400`}
+                                  >
+                                    {task.fatto && (
+                                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                  <span className="truncate">{task.titolo || 'Senza Titolo'}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
 
-                        {/* 2. Pulsante "Riduci" in cima -> FRECCIA IN GIÙ */}
-                        {hasMore && isExpanded && (
-                          <div className="w-full flex justify-center pb-[1px]">
-                            <button 
-                              onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); toggleExpandTasks(day.dateStr); }}
-                              className="w-[18px] h-[18px] bg-white border border-gray-300 rounded-full flex justify-center items-center cursor-pointer shadow-sm hover:bg-gray-100 hover:border-gray-400 transition-colors focus:outline-none"
-                              title="Riduci"
-                            >
-                              <svg className="w-2.5 h-2.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Lista Task */}
-                        {visibleTasks.map(task => {
-                          const taskColor = getTaskColorHex(task);
-
-                          return (
-                            <div 
-                              key={task.id} 
-                              onClick={(e: React.MouseEvent<HTMLDivElement>) => { 
-                                e.stopPropagation(); 
-                                onSelectTask?.(task); 
-                              }}
-                              className={`text-[8.5px] sm:text-[9.5px] rounded px-1 py-[2px] border-l-[2.5px] shadow-sm flex items-center gap-1.5 cursor-pointer transition-all overflow-hidden shrink-0 hover:brightness-95 hover:shadow-md ${
-                                task.fatto 
-                                  ? 'bg-gray-100 text-gray-500 line-through opacity-70' 
-                                  : 'bg-white text-gray-800 font-medium'
-                              }`}
-                              style={{ 
-                                borderColor: task.fatto ? '#9ca3af' : taskColor 
-                              }}
-                            >
-                              <button 
-                                type="button"
-                                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  if (onToggleTask) {
-                                    onToggleTask(task, !task.fatto);
-                                  }
-                                }}
-                                style={{
-                                  backgroundColor: task.fatto ? '#9ca3af' : '#ffffff',
-                                  borderColor: task.fatto ? '#9ca3af' : '#d1d5db',
-                                }}
-                                className={`shrink-0 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-[2px] border flex items-center justify-center transition-colors focus:outline-none cursor-pointer hover:border-gray-400`}
-                              >
-                                {task.fatto && (
-                                  <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                )}
-                              </button>
-                              <span className="truncate">{task.titolo || 'Senza Titolo'}</span>
-                            </div>
-                          );
-                        })}
+                        {/* Pulsante freccia. Cliccabile indipendentemente dallo stato. */}
+                        <button 
+                          onClick={(e: React.MouseEvent<HTMLButtonElement>) => { 
+                            e.stopPropagation(); 
+                            toggleExpandTasks(day.dateStr); 
+                          }}
+                          className={`pointer-events-auto w-[24px] h-[24px] bg-white border border-gray-300 rounded-full flex justify-center items-center cursor-pointer shadow-md hover:bg-gray-50 hover:border-blue-400 transition-all focus:outline-none shrink-0 ${isExpanded ? 'border-blue-400 shadow-lg bg-blue-50' : ''}`}
+                          title={isExpanded ? "Nascondi Task" : `Mostra ${dayTasks.length} Task`}
+                        >
+                          <svg 
+                            className={`w-3.5 h-3.5 text-blue-500 transition-transform duration-300 ${isExpanded ? 'rotate-180 text-blue-600' : ''}`} 
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
+                          </svg>
+                        </button>
                       </>
                     );
                   })()}

@@ -12,10 +12,16 @@ def list_for_user(
     user_id: int,
     data_riferimento: Optional[date] = None,
     tipo: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
 ) -> List[DailyEntry]:
     query = db.query(DailyEntry).filter(DailyEntry.user_id == user_id)
     if data_riferimento is not None:
         query = query.filter(DailyEntry.data_riferimento == data_riferimento)
+    if start_date is not None:
+        query = query.filter(DailyEntry.data_riferimento >= start_date)
+    if end_date is not None:
+        query = query.filter(DailyEntry.data_riferimento <= end_date)
     if tipo is not None:
         query = query.filter(DailyEntry.tipo == tipo)
     return query.order_by(
@@ -42,7 +48,7 @@ def entry_exists_by_type(
     query = db.query(DailyEntry).filter(
         DailyEntry.user_id == user_id,
         DailyEntry.data_riferimento == data_riferimento,
-        DailyEntry.tipo == tipo  # Ora cerca il tipo che gli passiamo noi (OD o OS)
+        DailyEntry.tipo == tipo 
     )
     if exclude_id is not None:
         query = query.filter(DailyEntry.id != exclude_id)
