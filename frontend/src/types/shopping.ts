@@ -235,10 +235,6 @@ export interface UpdateShoppingListArgs {
   data: ShoppingListUpdatePayload;
 }
 
-export interface DeleteShoppingListArgs {
-  id: number;
-}
-
 export interface UpdateShoppingListItemArgs {
   id: number;
   listId: number;
@@ -247,7 +243,7 @@ export interface UpdateShoppingListItemArgs {
 
 export interface DeleteShoppingListItemArgs {
   id: number;
-  listId: number;
+  listId?: number;
 }
 
 export interface ToggleShoppingListItemPurchasedArgs {
@@ -261,17 +257,10 @@ export interface UpdateShoppingSupplierArgs {
   data: ShoppingSupplierUpdatePayload;
 }
 
-export interface DeleteShoppingSupplierArgs {
-  id: number;
-}
-
 export interface UpdateShoppingPriceArgs {
   priceId: number;
-  payload: ShoppingPriceUpdatePayload;
-}
-
-export interface DeleteShoppingPriceArgs {
-  priceId: number;
+  data: ShoppingPriceUpdatePayload;
+  listId?: number;
 }
 
 /* =========================
