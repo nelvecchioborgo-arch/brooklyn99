@@ -1,60 +1,58 @@
 """
 Shopping domain - Collaborative shopping and inventory tracking.
 """
-from backend.domains.shopping.models import (
+from .models.groups import (
     ShoppingGroup,
     ShoppingGroupMember,
+)
+from .models.inventory import InventoryBatch
+from .models.lists import (
     ShoppingList,
     ShoppingListItem,
-    ShoppingProduct,        # AGGIUNTO: mancava nell'import originale
-    InventoryBatch,
-    ShoppingSupplier,
 )
-from backend.domains.shopping.schemas import (
-    PriceHistoryPoint,
+from .models.catalog import ShoppingProduct, ShoppingSupplier
+from .schemas.config import ConfigOption, ShoppingConfigBundle
+from .schemas.groups import (
     ShoppingGroupCreate,
     ShoppingGroupMemberCreate,
     ShoppingGroupMemberInvite,
     ShoppingGroupMemberResponse,
     ShoppingGroupMemberRoleUpdate,
-    ShoppingGroupMemberUpdate,
     ShoppingGroupResponse,
     ShoppingGroupUpdate,
+)
+from .schemas.inventory import (
+    InventoryBatchCreate,
+    InventoryBatchResponse,
+    InventoryBatchUpdate,
+)
+from .schemas.lists import (
     ShoppingListCreate,
     ShoppingListItemCreate,
     ShoppingListItemResponse,
     ShoppingListItemUpdate,
     ShoppingListResponse,
     ShoppingListUpdate,
-    # NOTA: qui ci sono ancora gli schemi di ShoppingPrice perché 
-    # non abbiamo ancora aggiornato schemas.py, ma non appena lo 
-    # faremo andranno cambiati in InventoryBatchCreate ecc.
-    # Per ora li lasciamo per far partire l'app, o fallirà schemas.py
-    InventoryBatchCreate,
-    InventoryBatchUpdate,
-    InventoryBatchResponse,
+)
+from .schemas.catalog import (
     ShoppingSupplierCreate,
     ShoppingSupplierResponse,
     ShoppingSupplierUpdate,
-    SupplierPriceSummary,
-    VALID_SHOPPING_GROUP_ROLE_CODES,
 )
 
 __all__ = [
-    "VALID_SHOPPING_GROUP_ROLE_CODES",
     "ShoppingGroup",
     "ShoppingGroupMember",
     "ShoppingList",
     "ShoppingListItem",
-    "ShoppingProduct",      # AGGIUNTO
-    "InventoryBatch",       # MODIFICATO: rimpiazza ShoppingPrice
+    "ShoppingProduct",
+    "InventoryBatch",
     "ShoppingSupplier",
     "ShoppingGroupCreate",
     "ShoppingGroupMemberCreate",
     "ShoppingGroupMemberInvite",
     "ShoppingGroupMemberResponse",
     "ShoppingGroupMemberRoleUpdate",
-    "ShoppingGroupMemberUpdate",
     "ShoppingGroupResponse",
     "ShoppingGroupUpdate",
     "ShoppingListCreate",
@@ -69,6 +67,6 @@ __all__ = [
     "ShoppingSupplierCreate",
     "ShoppingSupplierResponse",
     "ShoppingSupplierUpdate",
-    "SupplierPriceSummary",
-    "PriceHistoryPoint",
+    "ConfigOption",
+    "ShoppingConfigBundle",
 ]

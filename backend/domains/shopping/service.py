@@ -1,5 +1,7 @@
 """Service del dominio Shopping — regole di business per gruppi, liste, prodotti, articoli, fornitori e inventario."""
 
+from __future__ import annotations
+
 from datetime import date, datetime, timezone
 from typing import List, Optional
 
@@ -7,17 +9,28 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from backend.domains.shopping import repository as repo
-from backend.domains.shopping import schemas
-from backend.domains.shopping.models import (
-    ShoppingGroup,
-    ShoppingGroupMember,
-    ShoppingList,
-    ShoppingListItem,
-    InventoryBatch,
-    ShoppingProduct,
-    ShoppingSupplier,
+from backend.domains.shopping.models.catalog import ShoppingProduct, ShoppingSupplier
+from backend.domains.shopping.models.groups import ShoppingGroup, ShoppingGroupMember
+from backend.domains.shopping.models.inventory import InventoryBatch
+from backend.domains.shopping.models.lists import ShoppingList, ShoppingListItem
+from backend.domains.shopping.schemas.catalog import ShoppingSupplierCreate, ShoppingSupplierUpdate
+from backend.domains.shopping.schemas.config import ShoppingConfigBundle
+from backend.domains.shopping.schemas.groups import (
+    ShoppingGroupCreate,
+    ShoppingGroupMemberCreate,
+    ShoppingGroupMemberInvite,
+    ShoppingGroupMemberRoleUpdate,
+    ShoppingGroupUpdate,
+)
+from backend.domains.shopping.schemas.inventory import InventoryBatchCreate, InventoryBatchUpdate
+from backend.domains.shopping.schemas.lists import (
+    ShoppingListCreate,
+    ShoppingListItemCreate,
+    ShoppingListItemUpdate,
+    ShoppingListUpdate,
 )
 from backend.domains.users.models import User
+
 
 _LIST_NOT_FOUND = "Lista non trovata o non accessibile"
 _ITEM_NOT_FOUND = "Articolo non trovato o non accessibile"
@@ -36,7 +49,7 @@ def _today() -> date:
 
 
 def _normalize_name(value: str) -> str:
-    return value.strip().lower()
+    return repo.normalize_name(value)
 
 
 # ------------------------------------------------------------------ Groups
@@ -47,7 +60,7 @@ def list_groups(db: Session, current_user: User) -> List[ShoppingGroup]:
 def create_group(
     db: Session,
     current_user: User,
-    group_in: schemas.ShoppingGroupCreate,
+    group_in: ShoppingGroupCreate,
 ) -> ShoppingGroup:
     default_status_id = repo.active_group_status_id(db)
     if default_status_id is None:
@@ -69,7 +82,7 @@ def update_group(
     db: Session,
     current_user: User,
     group_id: int,
-    group_in: schemas.ShoppingGroupUpdate,
+    group_in: ShoppingGroupUpdate,
 ) -> ShoppingGroup:
     db_group = repo.get_group_owned(db, group_id, current_user.id)
     if not db_group:
@@ -101,7 +114,7 @@ def add_member(
     db: Session,
     current_user: User,
     group_id: int,
-    member_in: schemas.ShoppingGroupMemberCreate,
+    member_in: ShoppingGroupMemberCreate,
 ) -> ShoppingGroupMember:
     db_group = repo.get_group_owned(db, group_id, current_user.id)
     if not db_group:
@@ -127,7 +140,7 @@ def invite_member(
     db: Session,
     current_user: User,
     group_id: int,
-    invite_in: schemas.ShoppingGroupMemberInvite,
+    invite_in: ShoppingGroupMemberInvite,
 ) -> ShoppingGroupMember:
     db_group = repo.get_group_owned(db, group_id, current_user.id)
     if not db_group:
@@ -162,7 +175,7 @@ def update_member_role(
     current_user: User,
     group_id: int,
     user_id: int,
-    role_in: schemas.ShoppingGroupMemberRoleUpdate,
+    role_in: ShoppingGroupMemberRoleUpdate,
 ) -> ShoppingGroupMember:
     db_group = repo.get_group_owned(db, group_id, current_user.id)
     if not db_group:
@@ -204,13 +217,17 @@ def list_lists(db: Session, current_user: User) -> List[ShoppingList]:
     return repo.list_lists(db, current_user.id)
 
 
-def create_list(db: Session, current_user: User, list_in: schemas.ShoppingListCreate) -> ShoppingList:
+def create_list(db: Session, current_user: User, list_in: ShoppingListCreate) -> ShoppingList:
+    default_status_id = repo.active_list_status_id(db)
+    if default_status_id is None:
+        raise HTTPException(status_code=500, detail="ConfigCode list_status.active mancante")
+
     now = _now()
     db_list = ShoppingList(
         owner_id=current_user.id,
         group_id=list_in.group_id,
         visibility_id=list_in.visibility_id,
-        status_id=list_in.status_id or list_in.visibility_id,
+        status_id=list_in.status_id or default_status_id,
         name=list_in.name,
         description=list_in.description,
         created_at=now,
@@ -226,7 +243,7 @@ def update_list(
     db: Session,
     current_user: User,
     list_id: int,
-    list_in: schemas.ShoppingListUpdate,
+    list_in: ShoppingListUpdate,
 ) -> ShoppingList:
     db_list = repo.get_list_owned(db, list_id, current_user.id)
     if not db_list:
@@ -261,20 +278,27 @@ def list_items(
 def create_item(
     db: Session,
     current_user: User,
-    item_in: schemas.ShoppingListItemCreate,
+    item_in: ShoppingListItemCreate,
 ) -> ShoppingListItem:
-    db_list = repo.get_list_owned(db, item_in.shopping_list_id, current_user.id)
+    db_list = repo.get_list_accessible(db, item_in.shopping_list_id, current_user.id)
     if not db_list:
         raise HTTPException(status_code=404, detail=_LIST_NOT_FOUND)
 
-    db_product = repo.get_product(db, item_in.product_id)
-    if not db_product:
-        raise HTTPException(status_code=404, detail="Prodotto non trovato")
+    normalized_name = _normalize_name(item_in.product_name)
+    existing_open = repo.get_open_item_by_list_and_name(db, db_list.id, normalized_name)
+    if existing_open:
+        raise HTTPException(
+            status_code=409,
+            detail="Esiste già un articolo aperto con questo prodotto nella lista.",
+        )
 
+    db_product = repo.get_or_create_product_by_name(db, normalized_name, current_user.id)
     now = _now()
+
     db_item = ShoppingListItem(
-        shopping_list_id=item_in.shopping_list_id,
+        shopping_list_id=db_list.id,
         product_id=db_product.id,
+        name_normalized=normalized_name,
         quantity=item_in.quantity,
         unit_id=item_in.unit_id,
         notes=item_in.notes,
@@ -294,18 +318,32 @@ def update_item(
     db: Session,
     current_user: User,
     item_id: int,
-    item_in: schemas.ShoppingListItemUpdate,
+    item_in: ShoppingListItemUpdate,
 ) -> ShoppingListItem:
-    db_item = repo.get_item_owned(db, item_id, current_user.id)
+    db_item = repo.get_item_accessible(db, item_id, current_user.id)
     if not db_item:
         raise HTTPException(status_code=404, detail=_ITEM_NOT_FOUND)
 
     update_data = item_in.model_dump(exclude_unset=True)
 
-    if "product_id" in update_data and update_data["product_id"] is not None:
-        db_product = repo.get_product(db, update_data["product_id"])
-        if not db_product:
-            raise HTTPException(status_code=404, detail="Prodotto non trovato")
+    if "product_name" in update_data and update_data["product_name"] is not None:
+        normalized_name = _normalize_name(update_data["product_name"])
+
+        existing_open = repo.get_open_item_by_list_and_name(
+            db,
+            db_item.shopping_list_id,
+            normalized_name,
+        )
+        if existing_open and existing_open.id != db_item.id:
+            raise HTTPException(
+                status_code=409,
+                detail="Esiste già un articolo aperto con questo prodotto nella lista.",
+            )
+
+        db_product = repo.get_or_create_product_by_name(db, normalized_name, current_user.id)
+        db_item.product_id = db_product.id
+        db_item.name_normalized = normalized_name
+        update_data.pop("product_name")
 
     for field, value in update_data.items():
         setattr(db_item, field, value)
@@ -319,7 +357,7 @@ def update_item(
 
 
 def delete_item(db: Session, current_user: User, item_id: int) -> None:
-    db_item = repo.get_item_owned(db, item_id, current_user.id)
+    db_item = repo.get_item_accessible(db, item_id, current_user.id)
     if not db_item:
         raise HTTPException(status_code=404, detail=_ITEM_NOT_FOUND)
     repo.delete(db, db_item)
@@ -341,7 +379,7 @@ def list_suppliers(
 def create_supplier(
     db: Session,
     current_user: User,
-    supplier_in: schemas.ShoppingSupplierCreate,
+    supplier_in: ShoppingSupplierCreate,
 ) -> ShoppingSupplier:
     if repo.find_supplier_by_name(db, supplier_in.name):
         raise HTTPException(status_code=400, detail="Esiste già un fornitore con questo nome.")
@@ -370,7 +408,7 @@ def update_supplier(
     db: Session,
     current_user: User,
     supplier_id: int,
-    supplier_in: schemas.ShoppingSupplierUpdate,
+    supplier_in: ShoppingSupplierUpdate,
 ) -> ShoppingSupplier:
     db_supplier = repo.get_supplier(db, supplier_id)
     if not db_supplier:
@@ -413,9 +451,9 @@ def add_inventory_batch(
     db: Session,
     current_user: User,
     item_id: int,
-    batch_in: schemas.InventoryBatchCreate,
+    batch_in: InventoryBatchCreate,
 ) -> InventoryBatch:
-    db_item = repo.get_item_owned(db, item_id, current_user.id)
+    db_item = repo.get_item_accessible(db, item_id, current_user.id)
     if not db_item:
         raise HTTPException(status_code=404, detail=_ITEM_NOT_FOUND)
 
@@ -442,7 +480,7 @@ def add_inventory_batch(
         is_on_sale=batch_in.is_on_sale,
         purchased_by_user_id=purchased_by_user_id,
         created_by_user_id=current_user.id,
-        updated_by_user_id=current_user.id,
+        updated_by_user_id=None,
         created_at=today,
         updated_at=today,
     )
@@ -461,9 +499,9 @@ def update_inventory_batch(
     db: Session,
     current_user: User,
     batch_id: int,
-    batch_in: schemas.InventoryBatchUpdate,
+    batch_in: InventoryBatchUpdate,
 ) -> InventoryBatch:
-    db_batch = repo.get_batch(db, batch_id)
+    db_batch = repo.get_batch(db, batch_id, current_user.id)
     if not db_batch:
         raise HTTPException(status_code=404, detail="Lotto/Acquisto non trovato")
 
@@ -499,7 +537,7 @@ def update_inventory_batch(
 
 
 def delete_inventory_batch(db: Session, current_user: User, batch_id: int) -> None:
-    db_batch = repo.get_batch(db, batch_id)
+    db_batch = repo.get_batch(db, batch_id, current_user.id)
     if not db_batch:
         raise HTTPException(status_code=404, detail="Lotto/Acquisto non trovato")
 
@@ -522,7 +560,6 @@ def delete_inventory_batch(db: Session, current_user: User, batch_id: int) -> No
 # ------------------------------------------------------------------ Products
 def list_products(
     db: Session,
-    current_user: User,
     search: Optional[str] = None,
     limit: int = 20,
 ) -> List[ShoppingProduct]:
@@ -538,3 +575,17 @@ def get_product(
     if not db_product:
         raise HTTPException(status_code=404, detail="Prodotto non trovato")
     return db_product
+
+
+# ------------------------------------------------------------------ Config
+def get_config_bundle(db: Session) -> ShoppingConfigBundle:
+    return ShoppingConfigBundle(
+        unitOptions=repo.get_config_options(db, "shopping_unit"),
+        currencyOptions=repo.get_config_options(db, "currency"),
+        offerFlagOptions=repo.get_config_options(db, "offer_flag"),
+        visibilityOptions=repo.get_config_options(db, "list_visibility"),
+        listStatusOptions=repo.get_config_options(db, "list_status"),
+        groupStatusOptions=repo.get_config_options(db, "group_status"),
+        groupRoleOptions=repo.get_config_options(db, "shopping_group_role"),
+        supplierStatusOptions=repo.get_config_options(db, "supplier_status"),
+    )

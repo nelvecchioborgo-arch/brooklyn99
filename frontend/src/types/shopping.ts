@@ -9,6 +9,7 @@ export type ShoppingViewMode = 'items' | 'bulk-purchase';
 export interface ConfigOption {
   id: number;
   codeName: string;
+  codeValue?: string | null;
   displayName?: string | null;
   description?: string | null;
   sortOrder?: number | null;
@@ -73,20 +74,19 @@ export interface ShoppingListItem {
   id: number;
   shoppingListId: number;
   productId: number;
-
-  nameOriginal: string;
-  nameNormalized?: string | null;
+  
+  // Refactor: nameOriginal rimosso, introdotto productName
+  productName: string; 
+  nameNormalized: string;
 
   quantity?: number | null;
   unitId?: number | null;
   unitCodeName?: string | null;
-
-  statusId?: number | null;
-  statusCodeName?: string | null;
-
-  isPurchased: boolean;
   notes?: string | null;
 
+  isPurchased: boolean;
+
+  // I dati dell'ultimo acquisto possono restare se calcolati lato backend da InventoryBatch
   lastPrice?: number | null;
   lastCurrencyId?: number | null;
   lastCurrencyCodeName?: string | null;
@@ -160,7 +160,7 @@ export interface ShoppingConfigBundle {
 export interface ShoppingPriceCreatePayload {
   shoppingListId: number;
   shoppingListItemId: number;
-  productId: number;
+  productId: number | null;
   supplierId?: number | null;
   purchaseDate: string;
   price: number;
@@ -185,22 +185,21 @@ export interface ShoppingListUpdatePayload {
   statusId?: number | null;
 }
 
+// REFACTOR: Usa productName invece di productId e nameOriginal
 export interface ShoppingListItemCreatePayload {
   shoppingListId: number;
-  productId?: number | null;
-  nameOriginal: string;
+  productName: string;
   quantity?: number | null;
   unitId?: number | null;
   notes?: string | null;
-  statusId?: number | null;
 }
 
+// REFACTOR: Usa productName invece di productId e nameOriginal
 export interface ShoppingListItemUpdatePayload {
-  nameOriginal?: string;
+  productName?: string;
   quantity?: number | null;
   unitId?: number | null;
   notes?: string | null;
-  statusId?: number | null;
 }
 
 export interface ToggleShoppingListItemPurchasedPayload {
@@ -281,25 +280,39 @@ export interface UseShoppingDataResult {
   itemsLoading: boolean;
   suppliersLoading: boolean;
   configLoading: boolean;
+  productsLoading: boolean;
 
   isInitialLoading: boolean;
 
   setActiveListId: (id: number | null) => void;
 
-  refreshLists: () => Promise<void>;
-  refreshItems: (listId?: number | null) => Promise<void>;
-  refreshSuppliers: () => Promise<void>;
-  refreshConfig: () => Promise<void>;
+  refreshLists: () => Promise<unknown>;
+  refreshItems: (listId?: number | null) => Promise<unknown>;
+  refreshSuppliers: () => Promise<unknown>;
+  refreshConfig: () => Promise<unknown>;
 }
 
 export interface UseShoppingMutationsResult {
-  createList: (payload: ShoppingListCreatePayload) => Promise<ShoppingListSummary>;
-  updateList: (args: UpdateShoppingListArgs) => Promise<ShoppingListSummary>;
+  createList: (
+    payload: ShoppingListCreatePayload
+  ) => Promise<ShoppingListSummary>;
+
+  updateList: (
+    args: UpdateShoppingListArgs
+  ) => Promise<ShoppingListSummary>;
+
   deleteList: (id: number) => Promise<void>;
 
-  createItem: (payload: ShoppingListItemCreatePayload) => Promise<ShoppingListItem>;
-  updateItem: (args: UpdateShoppingListItemArgs) => Promise<ShoppingListItem>;
+  createItem: (
+    payload: ShoppingListItemCreatePayload
+  ) => Promise<ShoppingListItem>;
+
+  updateItem: (
+    args: UpdateShoppingListItemArgs
+  ) => Promise<ShoppingListItem>;
+
   deleteItem: (args: DeleteShoppingListItemArgs) => Promise<void>;
+
   togglePurchased: (
     args: ToggleShoppingListItemPurchasedArgs
   ) => Promise<ShoppingListItem>;
@@ -307,12 +320,16 @@ export interface UseShoppingMutationsResult {
   createSupplier: (
     payload: ShoppingSupplierCreatePayload
   ) => Promise<ShoppingSupplierOption>;
+
   updateSupplier: (
     args: UpdateShoppingSupplierArgs
   ) => Promise<ShoppingSupplierOption>;
+
   deleteSupplier: (id: number) => Promise<void>;
 
   addPrice: (payload: ShoppingPriceCreatePayload) => Promise<void>;
+
   updatePrice: (args: UpdateShoppingPriceArgs) => Promise<void>;
+
   deletePrice: (priceId: number) => Promise<void>;
 }

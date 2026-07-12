@@ -1,5 +1,5 @@
 // src/components/shared/shopping/ShoppingBulkPurchasePanel.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import { useShoppingMutations } from '../../../hooks/shopping/useShoppingMutations';
 import type {
   ConfigOption,
@@ -14,6 +14,7 @@ import {
 } from './shoppingUi';
 import {
   emptyPurchaseForm,
+  getConfigOptionLabel,
   getEurCurrencyId,
 } from './shoppingItems.utils';
 import type { PurchaseFormState } from './shoppingItems.utils';
@@ -32,12 +33,177 @@ interface ShoppingBulkPurchasePanelProps {
   offerFlagOptions: ConfigOption[];
 }
 
+interface ShoppingBulkPurchaseRowProps {
+  item: ShoppingListItem;
+  form: PurchaseFormState;
+  saving: boolean;
+  suppliers: ShoppingSupplierOption[];
+  currencyOptions: ConfigOption[];
+  offerFlagOptions: ConfigOption[];
+  onChangeForm: (
+    itemId: number,
+    updater: (prev: PurchaseFormState) => PurchaseFormState
+  ) => void;
+  onSave: (itemId: number) => void;
+}
+
 const renderConfigOptions = (options: ConfigOption[]) =>
   options.map((option) => (
     <option key={option.id} value={String(option.id)}>
-      {option.codeName}
+      {getConfigOptionLabel(option)}
     </option>
   ));
+
+const ShoppingBulkPurchaseRow: React.FC<ShoppingBulkPurchaseRowProps> = ({
+  item,
+  form,
+  saving,
+  suppliers,
+  currencyOptions,
+  offerFlagOptions,
+  onChangeForm,
+  onSave,
+}) => {
+  const supplierId = useId();
+  const priceId = useId();
+  const purchaseDateId = useId();
+  const currencyId = useId();
+  const offerFlagId = useId();
+  const itemLabel = item.productName || 'articolo';
+
+  return (
+    <div className={`${shoppingCardClass} flex flex-col gap-3 p-4`}>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium text-slate-800">
+          {itemLabel}
+        </p>
+        {item.notes ? (
+          <p className="truncate text-xs text-slate-400">{item.notes}</p>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div>
+          <label htmlFor={supplierId} className="sr-only">
+            Fornitore per {itemLabel}
+          </label>
+          <select
+            id={supplierId}
+            className={shoppingInputClass}
+            value={form.supplierId}
+            onChange={(e) =>
+              onChangeForm(item.id, (prev) => ({
+                ...prev,
+                supplierId: e.target.value,
+              }))
+            }
+          >
+            <option value="">Nessun fornitore</option>
+            {suppliers.map((supplier) => (
+              <option key={supplier.id} value={String(supplier.id)}>
+                {supplier.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor={priceId} className="sr-only">
+            Prezzo per {itemLabel}
+          </label>
+          <input
+            id={priceId}
+            type="number"
+            step="0.01"
+            min="0"
+            className={shoppingInputClass}
+            placeholder="Prezzo"
+            value={form.price}
+            onChange={(e) =>
+              onChangeForm(item.id, (prev) => ({
+                ...prev,
+                price: e.target.value,
+              }))
+            }
+            required
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div>
+          <label htmlFor={purchaseDateId} className="sr-only">
+            Data acquisto per {itemLabel}
+          </label>
+          <input
+            id={purchaseDateId}
+            type="date"
+            className={shoppingInputClass}
+            value={form.purchaseDate}
+            onChange={(e) =>
+              onChangeForm(item.id, (prev) => ({
+                ...prev,
+                purchaseDate: e.target.value,
+              }))
+            }
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor={currencyId} className="sr-only">
+            Valuta per {itemLabel}
+          </label>
+          <select
+            id={currencyId}
+            className={shoppingInputClass}
+            value={form.currencyId}
+            onChange={(e) =>
+              onChangeForm(item.id, (prev) => ({
+                ...prev,
+                currencyId: e.target.value,
+              }))
+            }
+          >
+            <option value="">Valuta</option>
+            {renderConfigOptions(currencyOptions)}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor={offerFlagId} className="sr-only">
+          Flag offerta per {itemLabel}
+        </label>
+        <select
+          id={offerFlagId}
+          className={shoppingInputClass}
+          value={form.offerFlagId}
+          onChange={(e) =>
+            onChangeForm(item.id, (prev) => ({
+              ...prev,
+              offerFlagId: e.target.value,
+            }))
+          }
+        >
+          <option value="">Nessun flag offerta</option>
+          {renderConfigOptions(offerFlagOptions)}
+        </select>
+      </div>
+
+      <div className="flex justify-end pt-1">
+        <button
+          type="button"
+          onClick={() => onSave(item.id)}
+          disabled={saving}
+          className={`${shoppingButtonPrimaryClass} disabled:opacity-50`}
+        >
+          {saving ? 'Salvataggio...' : 'Registra acquisto'}
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const ShoppingBulkPurchasePanel: React.FC<ShoppingBulkPurchasePanelProps> = ({
   activeList,
@@ -53,6 +219,8 @@ const ShoppingBulkPurchasePanel: React.FC<ShoppingBulkPurchasePanelProps> = ({
     [currencyOptions]
   );
 
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
   const openItems = useMemo(
     () => items.filter((item) => !item.isPurchased),
     [items]
@@ -66,12 +234,12 @@ const ShoppingBulkPurchasePanel: React.FC<ShoppingBulkPurchasePanelProps> = ({
         item,
         form: {
           ...emptyPurchaseForm(eurCurrencyId),
-          purchaseDate: new Date().toISOString().slice(0, 10),
+          purchaseDate: today,
         },
         saving: false,
       }))
     );
-  }, [openItems, eurCurrencyId]);
+  }, [openItems, eurCurrencyId, today]);
 
   const updateRowForm = (
     itemId: number,
@@ -91,7 +259,14 @@ const ShoppingBulkPurchasePanel: React.FC<ShoppingBulkPurchasePanelProps> = ({
     if (!row) return;
 
     const { item, form } = row;
-    if (!form.price || !form.purchaseDate || !form.currencyId) {
+    const priceValue = Number(form.price);
+
+    if (
+      !form.price ||
+      Number.isNaN(priceValue) ||
+      !form.purchaseDate ||
+      !form.currencyId
+    ) {
       return;
     }
 
@@ -108,7 +283,7 @@ const ShoppingBulkPurchasePanel: React.FC<ShoppingBulkPurchasePanelProps> = ({
         productId: item.productId,
         supplierId: form.supplierId ? Number(form.supplierId) : undefined,
         purchaseDate: form.purchaseDate,
-        price: Number(form.price),
+        price: priceValue,
         currencyId: form.currencyId ? Number(form.currencyId) : undefined,
         offerFlagId: form.offerFlagId ? Number(form.offerFlagId) : undefined,
       });
@@ -146,109 +321,17 @@ const ShoppingBulkPurchasePanel: React.FC<ShoppingBulkPurchasePanelProps> = ({
 
       <div className="space-y-3">
         {rows.map(({ item, form, saving }) => (
-          <div
+          <ShoppingBulkPurchaseRow
             key={item.id}
-            className={`${shoppingCardClass} flex flex-col gap-3 p-4`}
-          >
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-slate-800">
-                {item.nameOriginal}
-              </p>
-              {item.notes ? (
-                <p className="truncate text-xs text-slate-400">{item.notes}</p>
-              ) : null}
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <select
-                className={shoppingInputClass}
-                value={form.supplierId}
-                onChange={(e) =>
-                  updateRowForm(item.id, (prev) => ({
-                    ...prev,
-                    supplierId: e.target.value,
-                  }))
-                }
-              >
-                <option value="">Nessun fornitore</option>
-                {suppliers.map((supplier) => (
-                  <option key={supplier.id} value={String(supplier.id)}>
-                    {supplier.name}
-                  </option>
-                ))}
-              </select>
-
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                className={shoppingInputClass}
-                placeholder="Prezzo"
-                value={form.price}
-                onChange={(e) =>
-                  updateRowForm(item.id, (prev) => ({
-                    ...prev,
-                    price: e.target.value,
-                  }))
-                }
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <input
-                type="date"
-                className={shoppingInputClass}
-                value={form.purchaseDate}
-                onChange={(e) =>
-                  updateRowForm(item.id, (prev) => ({
-                    ...prev,
-                    purchaseDate: e.target.value,
-                  }))
-                }
-                required
-              />
-
-              <select
-                className={shoppingInputClass}
-                value={form.currencyId}
-                onChange={(e) =>
-                  updateRowForm(item.id, (prev) => ({
-                    ...prev,
-                    currencyId: e.target.value,
-                  }))
-                }
-              >
-                <option value="">Valuta</option>
-                {renderConfigOptions(currencyOptions)}
-              </select>
-            </div>
-
-            <select
-              className={shoppingInputClass}
-              value={form.offerFlagId}
-              onChange={(e) =>
-                updateRowForm(item.id, (prev) => ({
-                  ...prev,
-                  offerFlagId: e.target.value,
-                }))
-              }
-            >
-              <option value="">Nessun flag offerta</option>
-              {renderConfigOptions(offerFlagOptions)}
-            </select>
-
-            <div className="flex justify-end pt-1">
-              <button
-                type="button"
-                onClick={() => handleSaveRow(item.id)}
-                disabled={saving}
-                className={`${shoppingButtonPrimaryClass} disabled:opacity-50`}
-              >
-                {saving ? 'Salvataggio...' : 'Registra acquisto'}
-              </button>
-            </div>
-          </div>
+            item={item}
+            form={form}
+            saving={saving}
+            suppliers={suppliers}
+            currencyOptions={currencyOptions}
+            offerFlagOptions={offerFlagOptions}
+            onChangeForm={updateRowForm}
+            onSave={handleSaveRow}
+          />
         ))}
       </div>
     </div>

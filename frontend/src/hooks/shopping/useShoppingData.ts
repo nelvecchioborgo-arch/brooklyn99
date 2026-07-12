@@ -2,55 +2,76 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
-  fetchShoppingLists,
-  fetchShoppingListItems,
-  fetchShoppingSuppliers,
   fetchShoppingConfig,
+  fetchShoppingListItems,
+  fetchShoppingLists,
+  fetchShoppingProducts,
+  fetchShoppingSuppliers,
   shoppingQueryKeys,
 } from '@/api/shoppingApi';
 
-import type { UseShoppingDataResult } from '@/types/shopping';
+import type {
+  ShoppingConfigBundle,
+  ShoppingListItem,
+  ShoppingListSummary,
+  ShoppingProductOption,
+  ShoppingSupplierOption,
+  UseShoppingDataResult,
+} from '@/types/shopping';
 
 export const useShoppingData = (): UseShoppingDataResult => {
   const queryClient = useQueryClient();
   const [activeListId, setActiveListId] = useState<number | null>(null);
 
-  const listsQuery = useQuery({
+  const listsQuery = useQuery<ShoppingListSummary[]>({
     queryKey: shoppingQueryKeys.lists(),
     queryFn: ({ signal }) => fetchShoppingLists(signal),
     staleTime: 60_000,
     gcTime: 10 * 60_000,
   });
 
-  const suppliersQuery = useQuery({
+  const suppliersQuery = useQuery<ShoppingSupplierOption[]>({
     queryKey: shoppingQueryKeys.suppliers(),
     queryFn: ({ signal }) => fetchShoppingSuppliers(signal),
     staleTime: 10 * 60_000,
     gcTime: 30 * 60_000,
   });
 
-  const configQuery = useQuery({
+  const configQuery = useQuery<ShoppingConfigBundle>({
     queryKey: shoppingQueryKeys.config(),
     queryFn: ({ signal }) => fetchShoppingConfig(signal),
     staleTime: 30 * 60_000,
     gcTime: 60 * 60_000,
   });
 
+  const productsQuery = useQuery<ShoppingProductOption[]>({
+    queryKey: shoppingQueryKeys.products(),
+    queryFn: ({ signal }) => fetchShoppingProducts(signal),
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
+  });
+
   const resolvedActiveListId = useMemo(() => {
     const lists = listsQuery.data ?? [];
     if (lists.length === 0) return null;
 
-    if (activeListId !== null && lists.some((list) => list.id === activeListId)) {
+    if (
+      activeListId !== null &&
+      lists.some((list) => list.id === activeListId)
+    ) {
       return activeListId;
     }
 
     return lists[0].id;
   }, [activeListId, listsQuery.data]);
 
-  const itemsQuery = useQuery({
+  const hasActiveList = resolvedActiveListId !== null;
+
+  const itemsQuery = useQuery<ShoppingListItem[]>({
     queryKey: shoppingQueryKeys.items(resolvedActiveListId),
-    queryFn: ({ signal }) => fetchShoppingListItems(resolvedActiveListId!, signal),
-    enabled: resolvedActiveListId !== null,
+    queryFn: ({ signal }) =>
+      fetchShoppingListItems(resolvedActiveListId as number, signal),
+    enabled: hasActiveList,
     staleTime: 5_000,
     gcTime: 10 * 60_000,
     placeholderData: (previousData) => previousData,
@@ -59,6 +80,7 @@ export const useShoppingData = (): UseShoppingDataResult => {
   const lists = listsQuery.data ?? [];
   const items = itemsQuery.data ?? [];
   const suppliers = suppliersQuery.data ?? [];
+  const products = productsQuery.data ?? [];
   const config = configQuery.data ?? null;
 
   const activeList = useMemo(
@@ -70,7 +92,8 @@ export const useShoppingData = (): UseShoppingDataResult => {
     listsQuery.isLoading ||
     configQuery.isLoading ||
     suppliersQuery.isLoading ||
-    (resolvedActiveListId !== null && itemsQuery.isLoading && items.length === 0);
+    productsQuery.isLoading ||
+    (hasActiveList && itemsQuery.isLoading && items.length === 0);
 
   const refreshLists = async () => {
     await queryClient.invalidateQueries({
@@ -104,20 +127,16 @@ export const useShoppingData = (): UseShoppingDataResult => {
     activeListId: resolvedActiveListId,
     activeList,
     items,
-
     suppliers,
-    products: [],
+    products,
     config,
-
     listsLoading: listsQuery.isLoading,
     itemsLoading: itemsQuery.isLoading,
     suppliersLoading: suppliersQuery.isLoading,
+    productsLoading: productsQuery.isLoading,
     configLoading: configQuery.isLoading,
-
     isInitialLoading,
-
     setActiveListId,
-
     refreshLists,
     refreshItems,
     refreshSuppliers,

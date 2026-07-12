@@ -1,18 +1,14 @@
-"""
-Shopping domain models modularized.
-"""
-
-from .groups import ShoppingGroup, ShoppingGroupMember
 from .catalog import ShoppingProduct, ShoppingSupplier
-from .lists import ShoppingList, ShoppingListItem
+from .groups import ShoppingGroup, ShoppingGroupMember
 from .inventory import InventoryBatch
+from .lists import ShoppingList, ShoppingListItem
 
 __all__ = [
-    "ShoppingGroup",
-    "ShoppingGroupMember",
     "ShoppingProduct",
     "ShoppingSupplier",
+    "ShoppingGroup",
+    "ShoppingGroupMember",
+    "InventoryBatch",
     "ShoppingList",
     "ShoppingListItem",
-    "InventoryBatch",
 ]

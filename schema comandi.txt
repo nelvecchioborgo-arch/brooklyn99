@@ -1,20 +1,25 @@
-Smart Agenda - Avvio ambienti
-==============================
+Come cambiare database
 
-Unificato (backend + frontend):
-  dev.bat    -> DB volatile locale (dev)
-  test.bat   -> DB persistente locale (test)
-  prod.bat   -> DB su NAS (prod)
+Backend (uvicorn):
 
-Solo backend (senza frontend):
-  set APP_ENV=dev  && uvicorn backend.main:app --reload
-  set APP_ENV=test && uvicorn backend.main:app --reload
-  set APP_ENV=prod && uvicorn backend.main:app
+Database	Comando
+Dev (volatile locale)		set APP_ENV=dev && uvicorn main:app --reload
+Test (persistente locale)	set APP_ENV=test && uvicorn main:app --reload
+Prod (NAS in LAN)			set APP_ENV=prod && uvicorn main:app
+Se non specifichi APP_ENV, il default è dev.
 
-Solo frontend:
-  cd frontend && npm run dev
-  (VITE_API_BASE_URL ereditato dall'ambiente o da frontend/.env)
 
-Build produzione:
-  set VITE_API_BASE_URL=http://192.168.11.20:8000
-  cd frontend && npm run build
+Alembic (migrazioni):
+
+bash
+set APP_ENV=dev && alembic upgrade head
+set APP_ENV=test && alembic upgrade head
+set APP_ENV=prod && alembic upgrade head
+
+
+Frontend (Vite):
+
+bash
+npm run dev:dev      # → .env.development
+npm run dev:test     # → .env.test
+npm run dev:prod     # → .env.production

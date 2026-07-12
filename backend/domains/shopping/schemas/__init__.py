@@ -1,71 +1,45 @@
-"""
-Shopping domain schemas modularized.
-Pydantic models for collaborative shopping workflows and inventory.
-"""
-
-from .groups import (
-    ShoppingGroupCreate,
-    ShoppingGroupUpdate,
-    ShoppingGroupResponse,
-    ShoppingGroupMemberCreate,
-    ShoppingGroupMemberUpdate,
-    ShoppingGroupMemberInvite,
-    ShoppingGroupMemberRoleUpdate,
-    ShoppingGroupMemberResponse,
-    VALID_SHOPPING_GROUP_ROLE_CODES,
-)
-
 from .catalog import (
     ShoppingProductCreate,
-    ShoppingProductUpdate,
     ShoppingProductResponse,
+    ShoppingProductUpdate,
     ShoppingSupplierCreate,
-    ShoppingSupplierUpdate,
     ShoppingSupplierResponse,
+    ShoppingSupplierUpdate,
 )
-
-from .lists import (
-    ShoppingListCreate,
-    ShoppingListUpdate,
-    ShoppingListResponse,
-    ShoppingListItemCreate,
-    ShoppingListItemUpdate,
-    ShoppingListItemResponse,
+from .config import ConfigOption, ShoppingConfigBundle
+from .groups import (
+    ShoppingGroupCreate,
+    ShoppingGroupMemberCreate,
+    ShoppingGroupMemberInvite,
+    ShoppingGroupMemberResponse,
+    ShoppingGroupMemberUpdate,
+    ShoppingGroupMemberRoleUpdate,
+    ShoppingGroupResponse,
+    ShoppingGroupUpdate,
 )
-
 from .inventory import (
     InventoryBatchCreate,
-    InventoryBatchUpdate,
     InventoryBatchResponse,
+    InventoryBatchUpdate,
     SupplierPriceSummary,
     PriceHistoryPoint,
 )
+from .lists import (
+    ShoppingListCreate,
+    ShoppingListItemCreate,
+    ShoppingListItemResponse,
+    ShoppingListItemUpdate,
+    ShoppingListResponse,
+    ShoppingListUpdate,
+)
 
 __all__ = [
-    "VALID_SHOPPING_GROUP_ROLE_CODES",
-    "ShoppingGroupCreate",
-    "ShoppingGroupUpdate",
-    "ShoppingGroupResponse",
-    "ShoppingGroupMemberCreate",
-    "ShoppingGroupMemberUpdate",
-    "ShoppingGroupMemberInvite",
-    "ShoppingGroupMemberRoleUpdate",
-    "ShoppingGroupMemberResponse",
-    "ShoppingProductCreate",
-    "ShoppingProductUpdate",
-    "ShoppingProductResponse",
-    "ShoppingSupplierCreate",
-    "ShoppingSupplierUpdate",
-    "ShoppingSupplierResponse",
-    "ShoppingListCreate",
-    "ShoppingListUpdate",
-    "ShoppingListResponse",
-    "ShoppingListItemCreate",
-    "ShoppingListItemUpdate",
-    "ShoppingListItemResponse",
-    "InventoryBatchCreate",
-    "InventoryBatchUpdate",
-    "InventoryBatchResponse",
-    "SupplierPriceSummary",
-    "PriceHistoryPoint",
+    "ShoppingProductCreate", "ShoppingProductResponse", "ShoppingProductUpdate",
+    "ShoppingSupplierCreate", "ShoppingSupplierResponse", "ShoppingSupplierUpdate",
+    "ConfigOption", "ShoppingConfigBundle",
+    "ShoppingGroupCreate", "ShoppingGroupMemberCreate", "ShoppingGroupMemberInvite", "ShoppingGroupMemberUpdate",
+    "ShoppingGroupMemberResponse", "ShoppingGroupMemberRoleUpdate", "ShoppingGroupResponse", "ShoppingGroupUpdate",
+    "InventoryBatchCreate", "InventoryBatchResponse", "InventoryBatchUpdate", "SupplierPriceSummary", "PriceHistoryPoint",
+    "ShoppingListCreate", "ShoppingListItemCreate", "ShoppingListItemResponse",
+    "ShoppingListItemUpdate", "ShoppingListResponse", "ShoppingListUpdate",
 ]

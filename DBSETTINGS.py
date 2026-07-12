@@ -25,7 +25,7 @@ AMBIENTI = {
     "3": {
         "nome": "Operativo (NAS)",
         "env_file": BACKEND_DIR / ".env.prod",
-        "api_base_url": "http://localhost:8000",
+        "api_base_url": "http://192.168.11.20:8000",
     },
 }
 

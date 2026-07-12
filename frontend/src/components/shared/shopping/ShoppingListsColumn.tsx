@@ -1,5 +1,5 @@
 // src/components/shared/shopping/ShoppingListsColumn.tsx
-import React, { useEffect, useId, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import { useShoppingMutations } from '@/hooks/shopping/useShoppingMutations';
 import { useModal } from '@/hooks/useModals';
 import type {
@@ -44,10 +44,13 @@ const makeEmptyForm = (
   description: '',
 });
 
+const getConfigOptionLabel = (option: ConfigOption) =>
+  option.displayName?.trim() || option.codeName;
+
 const renderConfigOptions = (options: ConfigOption[]) =>
   options.map((option) => (
     <option key={option.id} value={String(option.id)}>
-      {option.codeName}
+      {getConfigOptionLabel(option)}
     </option>
   ));
 
@@ -59,7 +62,7 @@ interface ListModalProps {
   listVisibilityOptions: ConfigOption[];
   listStatusOptions: ConfigOption[];
   onClose: () => void;
-  onSubmit: (e: React.FormEvent) => Promise<void> | void;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => Promise<void> | void;
   submitLabel: string;
 }
 
@@ -75,6 +78,22 @@ const ListModal: React.FC<ListModalProps> = ({
   submitLabel,
 }) => {
   const titleId = useId();
+  const nameId = useId();
+  const descriptionId = useId();
+  const visibilityId = useId();
+  const statusId = useId();
+  const groupId = useId();
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm">
@@ -89,62 +108,105 @@ const ListModal: React.FC<ListModalProps> = ({
         </h2>
 
         <form onSubmit={onSubmit} className="space-y-3">
-          <input
-            className={shoppingInputClass}
-            placeholder="Nome lista"
-            value={form.name}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, name: e.target.value }))
-            }
-            required
-          />
+          <div>
+            <label htmlFor={nameId} className="mb-1 block text-xs font-medium text-gray-700">
+              Nome lista
+            </label>
+            <input
+              id={nameId}
+              className={shoppingInputClass}
+              placeholder="Nome lista"
+              value={form.name}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, name: e.target.value }))
+              }
+              required
+              autoFocus
+            />
+          </div>
 
-          <input
-            className={shoppingInputClass}
-            placeholder="Descrizione (opzionale)"
-            value={form.description}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, description: e.target.value }))
-            }
-          />
+          <div>
+            <label
+              htmlFor={descriptionId}
+              className="mb-1 block text-xs font-medium text-gray-700"
+            >
+              Descrizione
+            </label>
+            <input
+              id={descriptionId}
+              className={shoppingInputClass}
+              placeholder="Descrizione (opzionale)"
+              value={form.description}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, description: e.target.value }))
+              }
+            />
+          </div>
 
-          <select
-            className={shoppingInputClass}
-            value={form.visibilityId}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, visibilityId: e.target.value }))
-            }
-            required
-          >
-            <option value="">Seleziona visibilità</option>
-            {renderConfigOptions(listVisibilityOptions)}
-          </select>
+          <div>
+            <label
+              htmlFor={visibilityId}
+              className="mb-1 block text-xs font-medium text-gray-700"
+            >
+              Visibilità
+            </label>
+            <select
+              id={visibilityId}
+              className={shoppingInputClass}
+              value={form.visibilityId}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, visibilityId: e.target.value }))
+              }
+              required
+            >
+              <option value="">Seleziona visibilità</option>
+              {renderConfigOptions(listVisibilityOptions)}
+            </select>
+          </div>
 
-          <select
-            className={shoppingInputClass}
-            value={form.statusId}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, statusId: e.target.value }))
-            }
-          >
-            <option value="">Default backend</option>
-            {renderConfigOptions(listStatusOptions)}
-          </select>
+          <div>
+            <label
+              htmlFor={statusId}
+              className="mb-1 block text-xs font-medium text-gray-700"
+            >
+              Stato
+            </label>
+            <select
+              id={statusId}
+              className={shoppingInputClass}
+              value={form.statusId}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, statusId: e.target.value }))
+              }
+            >
+              <option value="">Default backend</option>
+              {renderConfigOptions(listStatusOptions)}
+            </select>
+          </div>
 
-          <select
-            className={shoppingInputClass}
-            value={form.groupId}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, groupId: e.target.value }))
-            }
-          >
-            <option value="">Nessun gruppo</option>
-            {groups.map((group) => (
-              <option key={group.id} value={String(group.id)}>
-                {group.name}
-              </option>
-            ))}
-          </select>
+          <div>
+            <label
+              htmlFor={groupId}
+              className="mb-1 block text-xs font-medium text-gray-700"
+            >
+              Gruppo
+            </label>
+            <select
+              id={groupId}
+              className={shoppingInputClass}
+              value={form.groupId}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, groupId: e.target.value }))
+              }
+            >
+              <option value="">Nessun gruppo</option>
+              {groups.map((group) => (
+                <option key={group.id} value={String(group.id)}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <button
@@ -210,17 +272,21 @@ const ShoppingListsColumn: React.FC<ShoppingListsColumnProps> = ({
     });
   }, [listVisibilityOptions]);
 
+  const visibleLists = useMemo(() => lists, [lists]);
+
   const openCreateModal = () => {
     setForm(makeEmptyForm(listVisibilityOptions));
     createModal.open(null);
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.visibilityId) return;
+
+    const trimmedName = form.name.trim();
+    if (!trimmedName || !form.visibilityId) return;
 
     await mutations.createList({
-      name: form.name.trim(),
+      name: trimmedName,
       description: form.description.trim() || undefined,
       groupId: form.groupId ? Number(form.groupId) : undefined,
       visibilityId: Number(form.visibilityId),
@@ -231,14 +297,17 @@ const ShoppingListsColumn: React.FC<ShoppingListsColumnProps> = ({
     createModal.close();
   };
 
-  const handleSaveEdit = async (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editModal.data) return;
+
+    const trimmedName = editForm.name.trim();
+    if (!trimmedName) return;
 
     await mutations.updateList({
       id: editModal.data.id,
       data: {
-        name: editForm.name.trim(),
+        name: trimmedName,
         description: editForm.description.trim() || undefined,
         groupId: editForm.groupId ? Number(editForm.groupId) : undefined,
         visibilityId: editForm.visibilityId
@@ -292,7 +361,7 @@ const ShoppingListsColumn: React.FC<ShoppingListsColumnProps> = ({
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
         {loadingLists ? (
           <p className="py-4 text-center text-xs text-gray-400">Caricamento...</p>
-        ) : lists.length === 0 ? (
+        ) : visibleLists.length === 0 ? (
           <p className="py-4 text-center text-xs text-gray-400">
             Nessuna lista. Creane una!
           </p>
@@ -308,7 +377,7 @@ const ShoppingListsColumn: React.FC<ShoppingListsColumnProps> = ({
               <p className="text-sm font-semibold text-gray-700">Tutte le liste</p>
             </button>
 
-            {lists.map((list) => {
+            {visibleLists.map((list) => {
               const isActive = activeListId === list.id;
 
               return (

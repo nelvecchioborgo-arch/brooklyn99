@@ -125,11 +125,6 @@ class User(Base):
         foreign_keys="ShoppingListItem.updated_by_user_id",
         back_populates="updated_by_user",
     )
-    shopping_items_purchased: Mapped[List["ShoppingListItem"]] = relationship(
-        "ShoppingListItem",
-        foreign_keys="ShoppingListItem.purchased_by_user_id",
-        back_populates="purchased_by_user",
-    )
 
     inventory_batches_purchased: Mapped[List["InventoryBatch"]] = relationship(
         "InventoryBatch",

@@ -99,7 +99,6 @@ const ShoppingHeaderBar: React.FC<ShoppingHeaderBarProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <div
               className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1"
-              role="tablist"
               aria-label="Modalità visualizzazione shopping"
             >
               <button
@@ -136,7 +135,7 @@ const ShoppingHeaderBar: React.FC<ShoppingHeaderBarProps> = ({
               <button
                 type="button"
                 onClick={onOpenActions}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={!hasActiveList}
               >
                 <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
@@ -168,7 +167,7 @@ const ShoppingHeaderBar: React.FC<ShoppingHeaderBarProps> = ({
             />
             <input
               id={searchInputId}
-              type="text"
+              type="search"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Cerca un articolo nella lista attiva..."

@@ -2,20 +2,19 @@
 import React from 'react';
 import type { ConfigOption } from '../../../types/shopping';
 import type { ItemFormState } from './shoppingItems.utils';
+import { getConfigOptionLabel } from './shoppingItems.utils';
 import {
   shoppingButtonPrimaryClass,
   shoppingButtonSecondaryClass,
   shoppingCardClass,
   shoppingInputClass,
 } from './shoppingUi';
-import { renderConfigOptions } from './shoppingItems.utils';
 
 interface ShoppingItemEditModalProps {
   open: boolean;
   editForm: ItemFormState;
   setEditForm: React.Dispatch<React.SetStateAction<ItemFormState>>;
   unitOptions: ConfigOption[];
-  itemStatusOptions: ConfigOption[];
   onClose: () => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 }
@@ -25,7 +24,6 @@ const ShoppingItemEditModal: React.FC<ShoppingItemEditModalProps> = ({
   editForm,
   setEditForm,
   unitOptions,
-  itemStatusOptions,
   onClose,
   onSubmit,
 }) => {
@@ -34,17 +32,19 @@ const ShoppingItemEditModal: React.FC<ShoppingItemEditModalProps> = ({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm">
       <div className={`${shoppingCardClass} w-full max-w-md p-5`}>
-        <h2 className="mb-4 text-lg font-bold text-slate-900">Modifica articolo</h2>
+        <h2 className="mb-4 text-lg font-bold text-slate-900">
+          Modifica articolo
+        </h2>
 
         <form onSubmit={onSubmit} className="space-y-3">
           <input
             className={shoppingInputClass}
             placeholder="Nome"
-            value={editForm.nameOriginal}
+            value={editForm.productName}
             onChange={(e) =>
               setEditForm((prev) => ({
                 ...prev,
-                nameOriginal: e.target.value,
+                productName: e.target.value,
               }))
             }
             required
@@ -76,12 +76,16 @@ const ShoppingItemEditModal: React.FC<ShoppingItemEditModalProps> = ({
               }
             >
               <option value="">Nessuna unità</option>
-              {renderConfigOptions(unitOptions)}
+              {unitOptions.map((option) => (
+                <option key={option.id} value={String(option.id)}>
+                  {getConfigOptionLabel(option)}
+                </option>
+              ))}
             </select>
           </div>
 
-          <input
-            className={shoppingInputClass}
+          <textarea
+            className={`${shoppingInputClass} min-h-[96px] resize-y`}
             placeholder="Note"
             value={editForm.notes}
             onChange={(e) =>
@@ -91,20 +95,6 @@ const ShoppingItemEditModal: React.FC<ShoppingItemEditModalProps> = ({
               }))
             }
           />
-
-          <select
-            className={shoppingInputClass}
-            value={editForm.statusId}
-            onChange={(e) =>
-              setEditForm((prev) => ({
-                ...prev,
-                statusId: e.target.value,
-              }))
-            }
-          >
-            <option value="">Default backend</option>
-            {renderConfigOptions(itemStatusOptions)}
-          </select>
 
           <div className="flex justify-end gap-2 pt-2">
             <button

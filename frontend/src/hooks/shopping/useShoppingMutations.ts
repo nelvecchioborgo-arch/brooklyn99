@@ -20,52 +20,20 @@ import {
 import type {
   ShoppingListCreatePayload,
   ShoppingListUpdatePayload,
+  ShoppingListItem,
   ShoppingListItemCreatePayload,
   ShoppingListItemUpdatePayload,
-  ToggleShoppingListItemPurchasedPayload,
   ShoppingSupplierCreatePayload,
   ShoppingSupplierUpdatePayload,
-  ShoppingPriceUpdatePayload,
-} from '@/api/shoppingApi';
-
-import type {
-  ShoppingListItem,
   ShoppingPriceCreatePayload,
+  UpdateShoppingListArgs,
+  UpdateShoppingListItemArgs,
+  DeleteShoppingListItemArgs,
+  ToggleShoppingListItemPurchasedArgs,
+  UpdateShoppingSupplierArgs,
+  UpdateShoppingPriceArgs,
   UseShoppingMutationsResult,
 } from '@/types/shopping';
-
-interface UpdateListArgs {
-  id: number;
-  data: ShoppingListUpdatePayload;
-}
-
-interface UpdateItemArgs {
-  id: number;
-  listId: number;
-  data: ShoppingListItemUpdatePayload;
-}
-
-interface DeleteItemArgs {
-  id: number;
-  listId?: number;
-}
-
-interface TogglePurchasedArgs {
-  id: number;
-  listId: number;
-  data: ToggleShoppingListItemPurchasedPayload;
-}
-
-interface UpdateSupplierArgs {
-  id: number;
-  data: ShoppingSupplierUpdatePayload;
-}
-
-interface UpdatePriceArgs {
-  priceId: number;
-  data: ShoppingPriceUpdatePayload;
-  listId?: number;
-}
 
 export const useShoppingMutations = (): UseShoppingMutationsResult => {
   const queryClient = useQueryClient();
@@ -74,13 +42,19 @@ export const useShoppingMutations = (): UseShoppingMutationsResult => {
     queryClient.invalidateQueries({ queryKey: shoppingQueryKeys.lists() });
 
   const invalidateItems = (listId: number) =>
-    queryClient.invalidateQueries({ queryKey: shoppingQueryKeys.items(listId) });
+    queryClient.invalidateQueries({
+      queryKey: shoppingQueryKeys.items(listId),
+    });
 
   const invalidateAllItems = () =>
-    queryClient.invalidateQueries({ queryKey: ['shopping', 'items'] });
+    queryClient.invalidateQueries({
+      queryKey: [...shoppingQueryKeys.all, 'items'],
+    });
 
   const invalidateSuppliers = () =>
-    queryClient.invalidateQueries({ queryKey: shoppingQueryKeys.suppliers() });
+    queryClient.invalidateQueries({
+      queryKey: shoppingQueryKeys.suppliers(),
+    });
 
   const replaceItemInCache = (listId: number, nextItem: ShoppingListItem) => {
     queryClient.setQueryData<ShoppingListItem[]>(
@@ -108,14 +82,16 @@ export const useShoppingMutations = (): UseShoppingMutationsResult => {
   };
 
   const createListMutation = useMutation({
-    mutationFn: createShoppingList,
+    mutationFn: (payload: ShoppingListCreatePayload) =>
+      createShoppingList(payload),
     onSuccess: async () => {
       await invalidateLists();
     },
   });
 
   const updateListMutation = useMutation({
-    mutationFn: ({ id, data }: UpdateListArgs) => updateShoppingList(id, data),
+    mutationFn: ({ id, data }: UpdateShoppingListArgs) =>
+      updateShoppingList(id, data),
     onSuccess: async () => {
       await invalidateLists();
     },
@@ -129,8 +105,9 @@ export const useShoppingMutations = (): UseShoppingMutationsResult => {
   });
 
   const createItemMutation = useMutation({
-    mutationFn: createShoppingListItem,
-    onSuccess: async (createdItem, vars) => {
+    mutationFn: (payload: ShoppingListItemCreatePayload) =>
+      createShoppingListItem(payload),
+    onSuccess: async (createdItem, vars: ShoppingListItemCreatePayload) => {
       appendItemToCache(vars.shoppingListId, createdItem);
 
       await Promise.all([
@@ -141,9 +118,9 @@ export const useShoppingMutations = (): UseShoppingMutationsResult => {
   });
 
   const updateItemMutation = useMutation({
-    mutationFn: ({ id, data }: UpdateItemArgs) =>
-      updateShoppingListItem(id, data),
-    onSuccess: async (updatedItem, vars) => {
+    mutationFn: ({ id, listId, data }: UpdateShoppingListItemArgs) =>
+      updateShoppingListItem(id, listId, data),
+    onSuccess: async (updatedItem, vars: UpdateShoppingListItemArgs) => {
       replaceItemInCache(vars.listId, updatedItem);
 
       await Promise.all([
@@ -154,26 +131,25 @@ export const useShoppingMutations = (): UseShoppingMutationsResult => {
   });
 
   const deleteItemMutation = useMutation({
-    mutationFn: ({ id }: DeleteItemArgs) => deleteShoppingListItem(id),
-    onSuccess: async (_data, vars) => {
-      if (typeof vars.listId === 'number') {
-        removeItemFromCache(vars.listId, vars.id);
+    mutationFn: ({ id }: DeleteShoppingListItemArgs) =>
+      deleteShoppingListItem(id),
+    onSuccess: async (_data, vars: DeleteShoppingListItemArgs) => {
+      removeItemFromCache(vars.listId, vars.id);
 
-        await Promise.all([
-          invalidateLists(),
-          invalidateItems(vars.listId),
-        ]);
-        return;
-      }
-
-      await Promise.all([invalidateLists(), invalidateAllItems()]);
+      await Promise.all([
+        invalidateLists(),
+        invalidateItems(vars.listId),
+      ]);
     },
   });
 
   const togglePurchasedMutation = useMutation({
-    mutationFn: ({ id, data }: TogglePurchasedArgs) =>
-      toggleShoppingListItemPurchased(id, data),
-    onSuccess: async (updatedItem, vars) => {
+    mutationFn: ({ id, listId, data }: ToggleShoppingListItemPurchasedArgs) =>
+      toggleShoppingListItemPurchased(id, listId, data),
+    onSuccess: async (
+      updatedItem,
+      vars: ToggleShoppingListItemPurchasedArgs
+    ) => {
       replaceItemInCache(vars.listId, updatedItem);
 
       await Promise.all([
@@ -184,14 +160,15 @@ export const useShoppingMutations = (): UseShoppingMutationsResult => {
   });
 
   const createSupplierMutation = useMutation({
-    mutationFn: createShoppingSupplier,
+    mutationFn: (payload: ShoppingSupplierCreatePayload) =>
+      createShoppingSupplier(payload),
     onSuccess: async () => {
       await invalidateSuppliers();
     },
   });
 
   const updateSupplierMutation = useMutation({
-    mutationFn: ({ id, data }: UpdateSupplierArgs) =>
+    mutationFn: ({ id, data }: UpdateShoppingSupplierArgs) =>
       updateShoppingSupplier(id, data),
     onSuccess: async () => {
       await invalidateSuppliers();
@@ -206,7 +183,8 @@ export const useShoppingMutations = (): UseShoppingMutationsResult => {
   });
 
   const addPriceMutation = useMutation({
-    mutationFn: createShoppingPrice,
+    mutationFn: (payload: ShoppingPriceCreatePayload) =>
+      createShoppingPrice(payload),
     onSuccess: async (_data, vars: ShoppingPriceCreatePayload) => {
       await Promise.all([
         invalidateLists(),
@@ -216,9 +194,9 @@ export const useShoppingMutations = (): UseShoppingMutationsResult => {
   });
 
   const updatePriceMutation = useMutation({
-    mutationFn: ({ priceId, data }: UpdatePriceArgs) =>
+    mutationFn: ({ priceId, data }: UpdateShoppingPriceArgs) =>
       updateShoppingPrice(priceId, data),
-    onSuccess: async (_data, vars) => {
+    onSuccess: async (_data, vars: UpdateShoppingPriceArgs) => {
       await invalidateLists();
 
       if (typeof vars.listId === 'number') {
@@ -241,37 +219,35 @@ export const useShoppingMutations = (): UseShoppingMutationsResult => {
     createList: (payload: ShoppingListCreatePayload) =>
       createListMutation.mutateAsync(payload),
 
-    updateList: (args: UpdateListArgs) =>
+    updateList: (args: UpdateShoppingListArgs) =>
       updateListMutation.mutateAsync(args),
 
-    deleteList: (id: number) =>
-      deleteListMutation.mutateAsync(id),
+    deleteList: (id: number) => deleteListMutation.mutateAsync(id),
 
     createItem: (payload: ShoppingListItemCreatePayload) =>
       createItemMutation.mutateAsync(payload),
 
-    updateItem: (args: UpdateItemArgs) =>
+    updateItem: (args: UpdateShoppingListItemArgs) =>
       updateItemMutation.mutateAsync(args),
 
-    deleteItem: (args: DeleteItemArgs) =>
+    deleteItem: (args: DeleteShoppingListItemArgs) =>
       deleteItemMutation.mutateAsync(args),
 
-    togglePurchased: (args: TogglePurchasedArgs) =>
+    togglePurchased: (args: ToggleShoppingListItemPurchasedArgs) =>
       togglePurchasedMutation.mutateAsync(args),
 
     createSupplier: (payload: ShoppingSupplierCreatePayload) =>
       createSupplierMutation.mutateAsync(payload),
 
-    updateSupplier: (args: UpdateSupplierArgs) =>
+    updateSupplier: (args: UpdateShoppingSupplierArgs) =>
       updateSupplierMutation.mutateAsync(args),
 
-    deleteSupplier: (id: number) =>
-      deleteSupplierMutation.mutateAsync(id),
+    deleteSupplier: (id: number) => deleteSupplierMutation.mutateAsync(id),
 
     addPrice: (payload: ShoppingPriceCreatePayload) =>
       addPriceMutation.mutateAsync(payload),
 
-    updatePrice: (args: UpdatePriceArgs) =>
+    updatePrice: (args: UpdateShoppingPriceArgs) =>
       updatePriceMutation.mutateAsync(args),
 
     deletePrice: (priceId: number) =>

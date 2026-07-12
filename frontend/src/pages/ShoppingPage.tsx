@@ -7,7 +7,7 @@ import ShoppingItemsColumn, {
 import ShoppingBulkPurchasePanel from '../components/shared/shopping/ShoppingBulkPurchasePanel';
 
 import { useShoppingData } from '../hooks/shopping/useShoppingData';
-import type { ShoppingViewMode } from '../types/shopping';
+import type { ShoppingListItem, ShoppingViewMode } from '../types/shopping';
 
 const ShoppingPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<ShoppingViewMode>('items');
@@ -34,13 +34,13 @@ const ShoppingPage: React.FC = () => {
   const listVisibilityOptions = config?.visibilityOptions ?? [];
   const listStatusOptions = config?.listStatusOptions ?? [];
 
-  const filteredItems = useMemo(() => {
+  const filteredItems = useMemo<ShoppingListItem[]>(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return items;
 
     return items.filter((item) => {
-      const name = item.nameOriginal ?? item.nameNormalized ?? '';
-      return name.toLowerCase().includes(q);
+      const name = item.productName.trim().toLowerCase();
+      return name.includes(q);
     });
   }, [items, searchQuery]);
 
@@ -132,7 +132,8 @@ const ShoppingPage: React.FC = () => {
                     Nessuna lista disponibile
                   </h2>
                   <p className="mt-2 text-sm text-slate-500">
-                    Crea una nuova lista per iniziare ad aggiungere articoli e registrare gli acquisti.
+                    Crea una nuova lista per iniziare ad aggiungere articoli e
+                    registrare gli acquisti.
                   </p>
                 </div>
               </div>
@@ -143,7 +144,8 @@ const ShoppingPage: React.FC = () => {
                     Nessuna lista selezionata
                   </h2>
                   <p className="mt-2 text-sm text-slate-500">
-                    Seleziona una lista dalla colonna laterale per visualizzare gli articoli e registrare gli acquisti.
+                    Seleziona una lista dalla colonna laterale per visualizzare
+                    gli articoli e registrare gli acquisti.
                   </p>
                 </div>
               </div>

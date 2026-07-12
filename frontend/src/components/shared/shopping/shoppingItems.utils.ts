@@ -1,14 +1,12 @@
-// src/components/shared/shopping/shoppingItems.utils.tsx
-import React from 'react';
+// src/components/shared/shopping/shoppingItems.utils.ts
 import type { ConfigOption } from '../../../types/shopping';
 
 export interface ItemFormState {
   shoppingListId: string;
-  nameOriginal: string;
+  productName: string; // REFACTOR: Usa productName invece di nameOriginal
   quantity: string;
   unitId: string;
   notes: string;
-  statusId: string;
 }
 
 export interface PurchaseFormState {
@@ -21,14 +19,16 @@ export interface PurchaseFormState {
 
 export const emptyItemForm = (shoppingListId = ''): ItemFormState => ({
   shoppingListId,
-  nameOriginal: '',
+  productName: '', // REFACTOR: Usa productName
   quantity: '',
   unitId: '',
   notes: '',
   statusId: '',
 });
 
-export const emptyPurchaseForm = (defaultCurrencyId = ''): PurchaseFormState => ({
+export const emptyPurchaseForm = (
+  defaultCurrencyId = ''
+): PurchaseFormState => ({
   supplierId: '',
   price: '',
   purchaseDate: new Date().toISOString().slice(0, 10),
@@ -36,12 +36,11 @@ export const emptyPurchaseForm = (defaultCurrencyId = ''): PurchaseFormState => 
   offerFlagId: '',
 });
 
-export const renderConfigOptions = (options: ConfigOption[]) =>
-  options.map((option) => (
-    <option key={option.id} value={String(option.id)}>
-      {option.codeName}
-    </option>
-  ));
+export const getConfigOptionLabel = (option: ConfigOption): string =>
+  option.displayName?.trim() ||
+  option.codeName?.trim() ||
+  option.description?.trim() ||
+  String(option.id);
 
 export const getEurCurrencyId = (currencyOptions: ConfigOption[]): string =>
   currencyOptions.find(

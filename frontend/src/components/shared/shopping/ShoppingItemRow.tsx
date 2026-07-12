@@ -22,7 +22,7 @@ const ShoppingItemRow: React.FC<ShoppingItemRowProps> = ({
   onDelete,
   onPurchase,
 }) => {
-  const itemLabel = item.nameOriginal || 'articolo';
+  const itemLabel = item.productName || 'articolo';
 
   return (
     <div className={`${shoppingCardClass} flex items-center gap-2 p-2.5`}>
@@ -54,14 +54,14 @@ const ShoppingItemRow: React.FC<ShoppingItemRowProps> = ({
               : 'text-slate-800',
           ].join(' ')}
         >
-          {item.nameOriginal}
+          {item.productName}
         </p>
 
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
           {item.quantity != null ? (
             <span>
               {item.quantity}
-              {item.unitLabel ? ` ${item.unitLabel}` : ''}
+              {item.unitCodeName ? ` ${item.unitCodeName}` : ''}
             </span>
           ) : null}
 

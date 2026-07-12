@@ -29,7 +29,11 @@ const ShoppingItemsList: React.FC<ShoppingItemsListProps> = ({
     >
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-2">
         {loading ? (
-          <p className="py-4 text-center text-xs text-gray-400" role="status" aria-live="polite">
+          <p
+            className="py-4 text-center text-xs text-gray-400"
+            role="status"
+            aria-live="polite"
+          >
             Caricamento...
           </p>
         ) : items.length === 0 ? (
@@ -44,7 +48,7 @@ const ShoppingItemsList: React.FC<ShoppingItemsListProps> = ({
                   item={item}
                   onToggle={onToggle}
                   onEdit={onEdit}
-                  onDelete={() => onDelete(item)}
+                  onDelete={onDelete}
                   onPurchase={onPurchase}
                 />
               </li>

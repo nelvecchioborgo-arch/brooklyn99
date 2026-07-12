@@ -1,5 +1,9 @@
 """Repository del dominio Shopping — solo accesso ai dati."""
 
+from __future__ import annotations
+
+import re
+import unicodedata
 from datetime import date, datetime, timezone
 from typing import List, Optional
 
@@ -7,16 +11,18 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 
 from backend.domains.catalogs.models import ConfigCode
-from backend.domains.shopping.models import (
-    ShoppingGroup,
-    ShoppingGroupMember,
-    ShoppingList,
-    ShoppingListItem,
-    InventoryBatch,
-    ShoppingProduct,
-    ShoppingSupplier,
-)
+from backend.domains.shopping.models.catalog import ShoppingProduct, ShoppingSupplier
+from backend.domains.shopping.models.groups import ShoppingGroup, ShoppingGroupMember
+from backend.domains.shopping.models.inventory import InventoryBatch
+from backend.domains.shopping.models.lists import ShoppingList, ShoppingListItem
 from backend.domains.users.models import User
+
+
+def normalize_name(value: str) -> str:
+    value = unicodedata.normalize("NFKC", value or "")
+    value = value.strip().lower()
+    value = re.sub(r"\s+", " ", value)
+    return value
 
 
 def _now() -> datetime:
@@ -27,14 +33,14 @@ def _today() -> date:
     return date.today()
 
 
-def _normalize_name(value: str) -> str:
-    return value.strip().lower()
-
-
 def _soft_delete_criteria():
     return (
         with_loader_criteria(ShoppingGroup, ShoppingGroup.deleted_at.is_(None), include_aliases=True),
-        with_loader_criteria(ShoppingGroupMember, ShoppingGroupMember.removed_at.is_(None), include_aliases=True),
+        with_loader_criteria(
+            ShoppingGroupMember,
+            ShoppingGroupMember.removed_at.is_(None),
+            include_aliases=True,
+        ),
         with_loader_criteria(ShoppingList, ShoppingList.deleted_at.is_(None), include_aliases=True),
         with_loader_criteria(ShoppingListItem, ShoppingListItem.deleted_at.is_(None), include_aliases=True),
         with_loader_criteria(ShoppingProduct, ShoppingProduct.deleted_at.is_(None), include_aliases=True),
@@ -270,13 +276,58 @@ def active_group_status_id(db: Session) -> Optional[int]:
     )
 
 
+def active_list_status_id(db: Session) -> Optional[int]:
+    return (
+        db.query(ConfigCode.id)
+        .filter(
+            ConfigCode.code_type == "list_status",
+            ConfigCode.code_value == "active",
+        )
+        .scalar()
+    )
+
+
+def active_supplier_status_id(db: Session) -> Optional[int]:
+    return (
+        db.query(ConfigCode.id)
+        .filter(
+            ConfigCode.code_type == "supplier_status",
+            ConfigCode.code_value == "active",
+        )
+        .scalar()
+    )
+
+
 # ------------------------------------------------------------------ Lists
-def list_lists(db: Session, owner_id: int) -> List[ShoppingList]:
+def list_lists(db: Session, user_id: int) -> List[ShoppingList]:
+    accessible_group_ids = (
+        db.query(ShoppingGroup.id)
+        .outerjoin(
+            ShoppingGroupMember,
+            (ShoppingGroupMember.group_id == ShoppingGroup.id)
+            & (ShoppingGroupMember.removed_at.is_(None)),
+        )
+        .filter(
+            ShoppingGroup.deleted_at.is_(None),
+            or_(
+                ShoppingGroup.owner_id == user_id,
+                ShoppingGroupMember.user_id == user_id,
+            ),
+        )
+        .distinct()
+        .all()
+    )
+    group_ids = [gid for (gid,) in accessible_group_ids]
+
+    filters = [ShoppingList.owner_id == user_id]
+    if group_ids:
+        filters.append(ShoppingList.group_id.in_(group_ids))
+
     return (
         db.query(ShoppingList)
         .options(*_list_loaders(), *_soft_delete_criteria())
         .filter(
-            ShoppingList.owner_id == owner_id,
+            or_(*filters),
             ShoppingList.deleted_at.is_(None),
         )
         .order_by(ShoppingList.created_at.asc())
@@ -297,12 +348,35 @@ def get_list_owned(db: Session, list_id: int, owner_id: int) -> Optional[Shoppin
     )
 
 
+def get_list_accessible(db: Session, list_id: int, user_id: int) -> Optional[ShoppingList]:
+    return (
+        db.query(ShoppingList)
+        .outerjoin(ShoppingGroup, ShoppingList.group_id == ShoppingGroup.id)
+        .outerjoin(
+            ShoppingGroupMember,
+            (ShoppingGroup.id == ShoppingGroupMember.group_id)
+            & (ShoppingGroupMember.removed_at.is_(None)),
+        )
+        .options(*_list_loaders(), *_soft_delete_criteria())
+        .filter(
+            ShoppingList.id == list_id,
+            ShoppingList.deleted_at.is_(None),
+            or_(
+                ShoppingList.owner_id == user_id,
+                ShoppingGroup.owner_id == user_id,
+                ShoppingGroupMember.user_id == user_id,
+            ),
+        )
+        .first()
+    )
+
+
 # ------------------------------------------------------------------ Products
 def list_products(db: Session, search: Optional[str] = None, limit: int = 50) -> List[ShoppingProduct]:
     query = db.query(ShoppingProduct).filter(ShoppingProduct.deleted_at.is_(None))
 
     if search:
-        normalized = _normalize_name(search)
+        normalized = normalize_name(search)
         query = query.filter(ShoppingProduct.name_normalized.ilike(f"{normalized}%"))
 
     return query.order_by(ShoppingProduct.name_normalized.asc()).limit(limit).all()
@@ -330,31 +404,70 @@ def get_product_by_name_normalized(db: Session, name_normalized: str) -> Optiona
     )
 
 
+def get_or_create_product_by_name(
+    db: Session,
+    normalized_name: str,
+    user_id: int,
+) -> ShoppingProduct:
+    product = get_product_by_name_normalized(db, normalized_name)
+    if product:
+        return product
+
+    product = ShoppingProduct(
+        name_normalized=normalized_name,
+        created_by_user_id=user_id,
+        updated_by_user_id=user_id,
+        created_at=_now(),
+        updated_at=_now(),
+    )
+    db.add(product)
+    db.flush()
+    return product
+
+
 # ------------------------------------------------------------------ Items
 def list_items(
     db: Session,
-    owner_id: int,
+    user_id: int,
     shopping_list_id: Optional[int] = None,
     is_purchased: Optional[bool] = None,
 ) -> List[ShoppingListItem]:
+    if shopping_list_id is None:
+        return []
+
+    if not get_list_accessible(db, shopping_list_id, user_id):
+        return []
+
     query = (
         db.query(ShoppingListItem)
-        .join(ShoppingList, ShoppingList.id == ShoppingListItem.shopping_list_id)
         .options(*_item_loaders(), *_soft_delete_criteria())
         .filter(
-            ShoppingList.owner_id == owner_id,
-            ShoppingList.deleted_at.is_(None),
+            ShoppingListItem.shopping_list_id == shopping_list_id,
             ShoppingListItem.deleted_at.is_(None),
         )
     )
-
-    if shopping_list_id is not None:
-        query = query.filter(ShoppingListItem.shopping_list_id == shopping_list_id)
 
     if is_purchased is not None:
         query = query.filter(ShoppingListItem.is_purchased == is_purchased)
 
     return query.order_by(ShoppingListItem.created_at.asc()).all()
+
+
+def get_open_item_by_list_and_name(
+    db: Session,
+    shopping_list_id: int,
+    name_normalized: str,
+) -> Optional[ShoppingListItem]:
+    return (
+        db.query(ShoppingListItem)
+        .filter(
+            ShoppingListItem.shopping_list_id == shopping_list_id,
+            ShoppingListItem.name_normalized == name_normalized,
+            ShoppingListItem.is_purchased.is_(False),
+            ShoppingListItem.deleted_at.is_(None),
+        )
+        .first()
+    )
 
 
 def get_item(db: Session, item_id: int) -> Optional[ShoppingListItem]:
@@ -379,6 +492,31 @@ def get_item_owned(db: Session, item_id: int, owner_id: int) -> Optional[Shoppin
             ShoppingList.owner_id == owner_id,
             ShoppingList.deleted_at.is_(None),
             ShoppingListItem.deleted_at.is_(None),
+        )
+        .first()
+    )
+
+
+def get_item_accessible(db: Session, item_id: int, user_id: int) -> Optional[ShoppingListItem]:
+    return (
+        db.query(ShoppingListItem)
+        .join(ShoppingList, ShoppingList.id == ShoppingListItem.shopping_list_id)
+        .outerjoin(ShoppingGroup, ShoppingList.group_id == ShoppingGroup.id)
+        .outerjoin(
+            ShoppingGroupMember,
+            (ShoppingGroup.id == ShoppingGroupMember.group_id)
+            & (ShoppingGroupMember.removed_at.is_(None)),
+        )
+        .options(*_item_loaders(), *_soft_delete_criteria())
+        .filter(
+            ShoppingListItem.id == item_id,
+            ShoppingListItem.deleted_at.is_(None),
+            ShoppingList.deleted_at.is_(None),
+            or_(
+                ShoppingList.owner_id == user_id,
+                ShoppingGroup.owner_id == user_id,
+                ShoppingGroupMember.user_id == user_id,
+            ),
         )
         .first()
     )
@@ -418,7 +556,7 @@ def get_supplier(db: Session, supplier_id: int) -> Optional[ShoppingSupplier]:
 
 
 def find_supplier_by_name(db: Session, name: str) -> Optional[ShoppingSupplier]:
-    normalized = _normalize_name(name)
+    normalized = normalize_name(name)
     return (
         db.query(ShoppingSupplier)
         .filter(
@@ -430,8 +568,9 @@ def find_supplier_by_name(db: Session, name: str) -> Optional[ShoppingSupplier]:
 
 
 def search_suppliers(db: Session, search: str, limit: int = 50) -> List[ShoppingSupplier]:
-    normalized = _normalize_name(search)
+    normalized = normalize_name(search)
     raw = search.strip()
+
     return (
         db.query(ShoppingSupplier)
         .filter(
@@ -459,17 +598,6 @@ def supplier_has_batches(db: Session, supplier_id: int) -> bool:
     )
 
 
-def active_supplier_status_id(db: Session) -> Optional[int]:
-    return (
-        db.query(ConfigCode.id)
-        .filter(
-            ConfigCode.code_type == "supplier_status",
-            ConfigCode.code_value == "active",
-        )
-        .scalar()
-    )
-
-
 # ------------------------------------------------------------------ Inventory Batches
 def list_batches_for_product(
     db: Session,
@@ -492,13 +620,28 @@ def list_batches_for_product(
     return query.all()
 
 
-def get_batch(db: Session, batch_id: int) -> Optional[InventoryBatch]:
+def get_batch(db: Session, batch_id: int, user_id: int) -> Optional[InventoryBatch]:
     return (
         db.query(InventoryBatch)
+        .join(ShoppingListItem, ShoppingListItem.id == InventoryBatch.list_item_id)
+        .join(ShoppingList, ShoppingList.id == ShoppingListItem.shopping_list_id)
+        .outerjoin(ShoppingGroup, ShoppingList.group_id == ShoppingGroup.id)
+        .outerjoin(
+            ShoppingGroupMember,
+            (ShoppingGroup.id == ShoppingGroupMember.group_id)
+            & (ShoppingGroupMember.removed_at.is_(None)),
+        )
         .options(*_batch_loaders(), *_soft_delete_criteria())
         .filter(
             InventoryBatch.id == batch_id,
             InventoryBatch.deleted_at.is_(None),
+            ShoppingListItem.deleted_at.is_(None),
+            ShoppingList.deleted_at.is_(None),
+            or_(
+                ShoppingList.owner_id == user_id,
+                ShoppingGroup.owner_id == user_id,
+                ShoppingGroupMember.user_id == user_id,
+            ),
         )
         .first()
     )
@@ -517,6 +660,16 @@ def refresh(db: Session, obj) -> None:
     db.refresh(obj)
 
 
+def get_config_options(db: Session, code_type: str) -> List[dict]:
+    codes = (
+        db.query(ConfigCode)
+        .filter(ConfigCode.code_type == code_type)
+        .order_by(ConfigCode.sort_order.asc(), ConfigCode.code_name.asc())
+        .all()
+    )
+    return [{"id": c.id, "value": c.code_value, "label": c.code_name} for c in codes]
+
+
 def delete(db: Session, obj) -> None:
     if hasattr(obj, "deleted_at"):
         if isinstance(obj, InventoryBatch):
@@ -528,6 +681,8 @@ def delete(db: Session, obj) -> None:
             now = _now()
             today = _today()
             obj.deleted_at = now
+            if hasattr(obj, "updated_at"):
+                obj.updated_at = now
 
             for item in obj.items:
                 if item.deleted_at is None:
@@ -535,10 +690,10 @@ def delete(db: Session, obj) -> None:
                     if hasattr(item, "updated_at"):
                         item.updated_at = now
 
-                    for batch in item.inventory_batches:
-                        if batch.deleted_at is None:
-                            batch.deleted_at = today
-                            batch.updated_at = today
+                for batch in item.inventory_batches:
+                    if batch.deleted_at is None:
+                        batch.deleted_at = today
+                        batch.updated_at = today
 
         elif isinstance(obj, ShoppingListItem):
             now = _now()

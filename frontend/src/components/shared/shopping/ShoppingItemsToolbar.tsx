@@ -1,5 +1,5 @@
 // src/components/shared/shopping/ShoppingItemsToolbar.tsx
-import React from 'react';
+import React, { useId } from 'react';
 import {
   shoppingButtonPrimaryClass,
   shoppingInputClass,
@@ -25,6 +25,7 @@ const ShoppingItemsToolbar: React.FC<ShoppingItemsToolbarProps> = ({
   onAddItem,
 }) => {
   const hasActiveList = activeListId != null;
+  const filterId = useId();
 
   return (
     <>
@@ -36,7 +37,8 @@ const ShoppingItemsToolbar: React.FC<ShoppingItemsToolbarProps> = ({
 
           {searchQuery ? (
             <p className="mt-1 truncate text-xs text-slate-500">
-              Filtro ricerca attivo: <span className="font-medium text-slate-700">{searchQuery}</span>
+              Filtro ricerca attivo:{' '}
+              <span className="font-medium text-slate-700">{searchQuery}</span>
             </p>
           ) : null}
         </div>
@@ -52,18 +54,24 @@ const ShoppingItemsToolbar: React.FC<ShoppingItemsToolbarProps> = ({
       </div>
 
       <div className="shrink-0 flex gap-2">
-        <select
-          className={`${shoppingInputClass} w-full sm:w-40`}
-          value={filtroStato}
-          onChange={(e) =>
-            onFiltroStatoChange(e.target.value as FiltroStato)
-          }
-          disabled={!hasActiveList}
-        >
-          <option value="tutti">Tutti</option>
-          <option value="aperti">Aperti</option>
-          <option value="completati">Completati</option>
-        </select>
+        <div className="w-full sm:w-40">
+          <label htmlFor={filterId} className="sr-only">
+            Filtra articoli per stato
+          </label>
+          <select
+            id={filterId}
+            className={`${shoppingInputClass} w-full`}
+            value={filtroStato}
+            onChange={(e) =>
+              onFiltroStatoChange(e.target.value as FiltroStato)
+            }
+            disabled={!hasActiveList}
+          >
+            <option value="tutti">Tutti</option>
+            <option value="aperti">Aperti</option>
+            <option value="completati">Completati</option>
+          </select>
+        </div>
       </div>
     </>
   );

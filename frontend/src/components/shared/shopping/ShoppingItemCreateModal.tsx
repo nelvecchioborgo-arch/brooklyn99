@@ -2,13 +2,13 @@
 import React from 'react';
 import type { ConfigOption } from '../../../types/shopping';
 import type { ItemFormState } from './shoppingItems.utils';
+import { getConfigOptionLabel } from './shoppingItems.utils';
 import {
   shoppingButtonPrimaryClass,
   shoppingButtonSecondaryClass,
   shoppingInputClass,
   shoppingCardClass,
 } from './shoppingUi';
-import { renderConfigOptions } from './shoppingItems.utils';
 
 interface ShoppingItemCreateModalProps {
   open: boolean;
@@ -37,7 +37,9 @@ const ShoppingItemCreateModal: React.FC<ShoppingItemCreateModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
       <div className={`${shoppingCardClass} w-full max-w-xl p-6`}>
         <div className="mb-4">
-          <h3 className="text-lg font-semibold text-slate-800">Nuovo articolo</h3>
+          <h3 className="text-lg font-semibold text-slate-800">
+            Nuovo articolo
+          </h3>
           <p className="text-sm text-slate-500">
             Inserisci rapidamente un articolo nella lista spesa attiva.
           </p>
@@ -56,11 +58,11 @@ const ShoppingItemCreateModal: React.FC<ShoppingItemCreateModalProps> = ({
               <input
                 type="text"
                 className={shoppingInputClass}
-                value={itemForm.nameOriginal}
+                value={itemForm.productName}
                 onChange={(e) =>
                   setItemForm((prev) => ({
                     ...prev,
-                    nameOriginal: e.target.value,
+                    productName: e.target.value,
                   }))
                 }
                 placeholder="Es. Pasta, latte, zucchero"
@@ -103,7 +105,11 @@ const ShoppingItemCreateModal: React.FC<ShoppingItemCreateModalProps> = ({
                 disabled={!hasActiveList}
               >
                 <option value="">Unità predefinita</option>
-                {renderConfigOptions(unitOptions)}
+                {unitOptions.map((option) => (
+                  <option key={option.id} value={String(option.id)}>
+                    {getConfigOptionLabel(option)}
+                  </option>
+                ))}
               </select>
             </label>
           </div>
@@ -136,7 +142,7 @@ const ShoppingItemCreateModal: React.FC<ShoppingItemCreateModalProps> = ({
             <button
               type="submit"
               className={shoppingButtonPrimaryClass}
-              disabled={!hasActiveList || !itemForm.nameOriginal.trim()}
+              disabled={!hasActiveList || !itemForm.productName.trim()}
             >
               Crea articolo
             </button>

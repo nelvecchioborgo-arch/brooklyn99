@@ -1,6 +1,7 @@
 """
 Shopping lists and list items.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -11,10 +12,12 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,8 +26,8 @@ from backend.core.database import Base
 if TYPE_CHECKING:
     from backend.domains.catalogs.models import ConfigCode
     from backend.domains.users.models import User
-    from .groups import ShoppingGroup
     from .catalog import ShoppingProduct
+    from .groups import ShoppingGroup
     from .inventory import InventoryBatch
 
 
@@ -36,7 +39,7 @@ class ShoppingList(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     owner_id: Mapped[int] = mapped_column(
-        "user_id",
+        "user_id",  # Mappato sulla colonna reale "user_id"
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
@@ -108,10 +111,22 @@ class ShoppingList(Base):
     def __repr__(self) -> str:
         return f"<ShoppingList id={self.id} name={self.name!r}>"
 
+
 class ShoppingListItem(Base):
     """Item inside a shopping list."""
 
     __tablename__ = "shopping_list_items"
+    
+    # Questo allinea il modello all'indice unico parziale presente nel DB
+    __table_args__ = (
+        Index(
+            "ux_shopping_list_items_open_name",
+            "shopping_list_id",
+            "name_normalized",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL AND is_purchased = false"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -122,12 +137,15 @@ class ShoppingListItem(Base):
         index=True,
     )
 
-    name_original: Mapped[str] = mapped_column(String(255), nullable=False)
-    name_normalized: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-
     product_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("shopping_products.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    name_normalized: Mapped[str] = mapped_column(
+        String(255),
         nullable=False,
         index=True,
     )
@@ -143,22 +161,10 @@ class ShoppingListItem(Base):
 
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    status_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("config_codes.id", ondelete="RESTRICT"),
+    is_purchased: Mapped[bool] = mapped_column(
+        Boolean,
         nullable=False,
-        index=True,
-    )
-
-    is_purchased: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-
-    purchased_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-
-    purchased_by_user_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
+        default=False,
     )
 
     created_by_user_id: Mapped[int] = mapped_column(
@@ -198,16 +204,7 @@ class ShoppingListItem(Base):
         "ConfigCode",
         foreign_keys=[unit_id],
     )
-    status: Mapped["ConfigCode"] = relationship(
-        "ConfigCode",
-        foreign_keys=[status_id],
-    )
 
-    purchased_by_user: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[purchased_by_user_id],
-        back_populates="shopping_items_purchased",
-    )
     created_by_user: Mapped["User"] = relationship(
         "User",
         foreign_keys=[created_by_user_id],
@@ -230,7 +227,3 @@ class ShoppingListItem(Base):
             f"<ShoppingListItem id={self.id} shopping_list_id={self.shopping_list_id} "
             f"product_id={self.product_id} purchased={self.is_purchased}>"
         )
-
-    @property
-    def product_name(self) -> Optional[str]:
-        return self.product.name_normalized if self.product else None

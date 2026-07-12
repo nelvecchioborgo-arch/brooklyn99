@@ -43,7 +43,6 @@ interface ShoppingItemsColumnProps {
   items: ShoppingListItem[];
   suppliers: ShoppingSupplierOption[];
   unitOptions: ConfigOption[];
-  itemStatusOptions: ConfigOption[];
   currencyOptions: ConfigOption[];
   offerFlagOptions: ConfigOption[];
   loading: boolean;
@@ -61,7 +60,6 @@ const ShoppingItemsColumn = forwardRef<
       items,
       suppliers,
       unitOptions,
-      itemStatusOptions,
       currencyOptions,
       offerFlagOptions,
       loading,
@@ -119,7 +117,7 @@ const ShoppingItemsColumn = forwardRef<
       () => ({
         openCreateModal: handleOpenCreate,
       }),
-      [activeListId]
+      [handleOpenCreate]
     );
 
     const filteredItems = useMemo(() => {
@@ -151,12 +149,12 @@ const ShoppingItemsColumn = forwardRef<
 
     const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      if (!itemForm.nameOriginal.trim()) return;
+      if (!itemForm.productName.trim()) return;
       if (!itemForm.shoppingListId) return;
 
       await mutations.createItem({
         shoppingListId: Number(itemForm.shoppingListId),
-        nameOriginal: itemForm.nameOriginal.trim(),
+        productName: itemForm.productName.trim(),
         quantity: itemForm.quantity ? Number(itemForm.quantity) : undefined,
         unitId: itemForm.unitId ? Number(itemForm.unitId) : undefined,
         notes: itemForm.notes?.trim() || undefined,
@@ -174,7 +172,7 @@ const ShoppingItemsColumn = forwardRef<
       try {
         await mutations.createItem({
           shoppingListId: activeListId,
-          nameOriginal: quickName.trim(),
+          productName: quickName.trim(),
           quantity: quickQuantity ? Number(quickQuantity) : undefined,
           unitId: quickUnitId ? Number(quickUnitId) : undefined,
           notes: undefined,
@@ -189,10 +187,9 @@ const ShoppingItemsColumn = forwardRef<
       setEditForm({
         shoppingListId:
           item.shoppingListId != null ? String(item.shoppingListId) : '',
-        nameOriginal: item.nameOriginal ?? '',
+        productName: item.productName ?? '',
         quantity: item.quantity != null ? String(item.quantity) : '',
         unitId: item.unitId != null ? String(item.unitId) : '',
-        statusId: item.statusId != null ? String(item.statusId) : '',
         notes: item.notes ?? '',
       });
 
@@ -212,10 +209,9 @@ const ShoppingItemsColumn = forwardRef<
         id: editModal.data.id,
         listId: editModal.data.shoppingListId,
         data: {
-          nameOriginal: editForm.nameOriginal.trim() || undefined,
+          productName: editForm.productName.trim() || undefined,
           quantity: editForm.quantity ? Number(editForm.quantity) : undefined,
           unitId: editForm.unitId ? Number(editForm.unitId) : undefined,
-          statusId: editForm.statusId ? Number(editForm.statusId) : undefined,
           notes: editForm.notes?.trim() || undefined,
         },
       });
@@ -332,7 +328,6 @@ const ShoppingItemsColumn = forwardRef<
           editForm={editForm}
           setEditForm={setEditForm}
           unitOptions={unitOptions}
-          itemStatusOptions={itemStatusOptions}
         />
 
         <ShoppingPurchaseModal
@@ -344,7 +339,7 @@ const ShoppingItemsColumn = forwardRef<
           suppliers={suppliers}
           currencyOptions={currencyOptions}
           offerFlagOptions={offerFlagOptions}
-          itemName={purchaseModal.data?.nameOriginal ?? ''}
+          itemName={purchaseModal.data?.productName ?? ''}
         />
       </div>
     );
