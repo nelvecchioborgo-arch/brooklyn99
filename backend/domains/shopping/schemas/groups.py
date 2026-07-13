@@ -50,6 +50,28 @@ class ShoppingGroupResponse(ORMBaseModel):
 class ShoppingGroupMemberCreate(StrictBaseModel):
     user_id: int
     role_id: int
+    _is_role_valid: bool = False
+
+    @field_validator("user_id")
+    @classmethod
+    def validate_user_exists(cls, value: int) -> int:
+        from backend.api.deps import get_db
+        from backend.domains.users.repos import user_repo
+        db = next(get_db())
+        user = user_repo.get(db, id=value)
+        if not user:
+            raise ValueError(f"L'utente con id={value} non esiste.")
+        return value
+
+    @model_validator(mode="after")
+    def validate_role_is_shopping_group_role(self) -> "ShoppingGroupMemberCreate":
+        from backend.api.deps import get_db
+        from backend.domains.config.repos import config_code_repo
+        db = next(get_db())
+        role = config_code_repo.get_by_id_and_type(db, id=self.role_id, code_type="shopping_group_role")
+        if not role:
+            raise ValueError(f"Il ruolo con id={self.role_id} non è un ruolo valido per i gruppi di shopping.")
+        return self
 
 class ShoppingGroupMemberUpdate(StrictBaseModel):
     role_id: int

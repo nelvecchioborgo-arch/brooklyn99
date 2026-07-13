@@ -1,16 +1,15 @@
 // src/api/shoppingApi.ts
 import { apiClient } from './client';
 import type {
-  ConfigOption,
   ShoppingConfigBundle,
+  ShoppingGroup,
   ShoppingListCreatePayload,
   ShoppingListItem,
   ShoppingListItemCreatePayload,
   ShoppingListItemUpdatePayload,
   ShoppingListSummary,
   ShoppingListUpdatePayload,
-  ShoppingPriceCreatePayload,
-  ShoppingPriceUpdatePayload,
+  InventoryBatchCreatePayload,
   ShoppingProductOption,
   ShoppingSupplierCreatePayload,
   ShoppingSupplierOption,
@@ -35,14 +34,7 @@ type ShoppingListItemApi = {
   unit_code_name?: string | null;
   notes?: string | null;
   is_purchased: boolean;
-  
-  // Dati batch (se il backend li espone)
-  last_price?: number | string | null;
-  last_currency_id?: number | null;
-  last_currency_code_name?: string | null;
-  last_supplier_id?: number | null;
-  last_supplier_name?: string | null;
-  last_purchase_date?: string | null;
+  inventory_batches?: any[]; // FIX: Il backend ora invia i lotti di acquisto
   
   created_at?: string;
   updated_at?: string | null;
@@ -69,6 +61,15 @@ type ShoppingSupplierOptionApi = {
   is_active?: boolean;
 };
 
+type ShoppingGroupApi = {
+  id: number;
+  name: string;
+  description?: string | null;
+  owner_id: number;
+  status_id: number;
+  created_at: string;
+};
+
 type ConfigOptionApi = {
   id: number;
   value?: string | null;
@@ -83,11 +84,14 @@ type ConfigOptionApi = {
 
 type ShoppingConfigBundleApi = {
   unitOptions?: ConfigOptionApi[];
-  itemStatusOptions?: ConfigOptionApi[];
   currencyOptions?: ConfigOptionApi[];
   offerFlagOptions?: ConfigOptionApi[];
   visibilityOptions?: ConfigOptionApi[];
   listStatusOptions?: ConfigOptionApi[];
+  // FIX: Aggiungiamo le opzioni mancanti fornite dal backend
+  groupRoleOptions?: ConfigOptionApi[];
+  groupStatusOptions?: ConfigOptionApi[];
+  supplierStatusOptions?: ConfigOptionApi[];
 };
 
 type ShoppingProductOptionApi = {
@@ -135,19 +139,6 @@ function toNumberOrNull(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function normalizeConfigOption(option: ConfigOptionApi): ConfigOption {
-  return {
-    id: Number(option.id),
-    codeName: option.code_name ?? option.label ?? option.value ?? '',
-    codeValue: option.code_value ?? option.value ?? null,
-    displayName:
-      option.display_name ?? option.label ?? option.code_name ?? null,
-    description: option.description ?? null,
-    sortOrder: option.sort_order ?? null,
-    isActive: option.is_active ?? true,
-  };
-}
-
 // REFACTOR: Normalizzazione pulita, senza fallback strani sui legacy
 function normalizeShoppingListItem(item: ShoppingListItemApi): ShoppingListItem {
   return {
@@ -165,13 +156,7 @@ function normalizeShoppingListItem(item: ShoppingListItemApi): ShoppingListItem 
     isPurchased: Boolean(item.is_purchased),
     notes: item.notes ?? null,
 
-    lastPrice: toNumberOrNull(item.last_price),
-    lastCurrencyId: item.last_currency_id ?? null,
-    lastCurrencyCodeName: item.last_currency_code_name ?? null,
-    lastSupplierId: item.last_supplier_id ?? null,
-    lastSupplierName: item.last_supplier_name ?? null,
-    lastPurchaseDate: item.last_purchase_date ?? null,
-
+    inventoryBatches: item.inventory_batches ?? [],
     createdAt: item.created_at ?? undefined,
     updatedAt: item.updated_at ?? undefined,
   };
@@ -216,6 +201,16 @@ function normalizeShoppingSupplierOption(
   };
 }
 
+function normalizeShoppingGroup(group: ShoppingGroupApi): ShoppingGroup {
+  return {
+    id: Number(group.id),
+    name: group.name,
+    description: group.description ?? null,
+    ownerId: Number(group.owner_id),
+    statusId: Number(group.status_id),
+  };
+}
+
 function normalizeShoppingProductOption(
   product: ShoppingProductOptionApi
 ): ShoppingProductOption {
@@ -239,13 +234,27 @@ function normalizeShoppingProductOption(
 function normalizeShoppingConfigBundle(
   config: ShoppingConfigBundleApi
 ): ShoppingConfigBundle {
+  const normalize = (option: ConfigOptionApi) => {
+    // Logica di normalizzazione più robusta e chiara.
+    // Privilegiamo i campi moderni, ma gestiamo i fallback in modo esplicito.
+    const codeName = option.code_name ?? option.label ?? option.value ?? '';
+    const displayName = option.display_name ?? option.label ?? codeName;
+
+    return {
+      id: Number(option.id),
+      codeName: codeName,
+      displayName: displayName,
+    };
+  };
+
   return {
-    unitOptions: (config.unitOptions ?? []).map(normalizeConfigOption),
-    itemStatusOptions: (config.itemStatusOptions ?? []).map(normalizeConfigOption),
-    currencyOptions: (config.currencyOptions ?? []).map(normalizeConfigOption),
-    offerFlagOptions: (config.offerFlagOptions ?? []).map(normalizeConfigOption),
-    visibilityOptions: (config.visibilityOptions ?? []).map(normalizeConfigOption),
-    listStatusOptions: (config.listStatusOptions ?? []).map(normalizeConfigOption),
+    unitOptions: (config.unitOptions ?? []).map(normalize),
+    currencyOptions: (config.currencyOptions ?? []).map(normalize),
+    offerFlagOptions: (config.offerFlagOptions ?? []).map(normalize),
+    visibilityOptions: (config.visibilityOptions ?? []).map(normalize),
+    listStatusOptions: (config.listStatusOptions ?? []).map(normalize),
+    groupRoleOptions: (config.groupRoleOptions ?? []).map(normalize),
+    supplierStatusOptions: (config.supplierStatusOptions ?? []).map(normalize),
   };
 }
 
@@ -299,50 +308,23 @@ function serializeShoppingSupplierPayload(
   };
 }
 
-function serializeShoppingPriceCreatePayload(
-  payload: ShoppingPriceCreatePayload
+// FIX: Serializzazione per il nuovo InventoryBatch
+function serializeInventoryBatchCreatePayload(
+  payload: InventoryBatchCreatePayload
 ) {
   return {
-    shopping_list_id: payload.shoppingListId,
-    shopping_list_item_id: payload.shoppingListItemId,
     product_id: payload.productId,
-    ...(payload.supplierId !== undefined
-      ? { supplier_id: payload.supplierId }
-      : {}),
+    list_item_id: payload.shoppingListItemId,
+    quantity_purchased: 1, // Default a 1, il backend potrebbe richiederlo
+    purchase_price: payload.price,
     purchase_date: payload.purchaseDate,
-    price: payload.price,
-    ...(payload.currencyId !== undefined
-      ? { currency_id: payload.currencyId }
-      : {}),
-    ...(payload.offerFlagId !== undefined
-      ? { offer_flag_id: payload.offerFlagId }
-      : {}),
-    ...(payload.expirationDate !== undefined
-      ? { expiration_date: payload.expirationDate }
-      : {}),
-  };
-}
-
-function serializeShoppingPriceUpdatePayload(
-  payload: ShoppingPriceUpdatePayload
-) {
-  return {
     ...(payload.supplierId !== undefined
       ? { supplier_id: payload.supplierId }
       : {}),
-    ...(payload.purchaseDate !== undefined
-      ? { purchase_date: payload.purchaseDate }
-      : {}),
-    ...(payload.price !== undefined ? { price: payload.price } : {}),
-    ...(payload.currencyId !== undefined
-      ? { currency_id: payload.currencyId }
-      : {}),
-    ...(payload.offerFlagId !== undefined
-      ? { offer_flag_id: payload.offerFlagId }
-      : {}),
-    ...(payload.expirationDate !== undefined
-      ? { expiration_date: payload.expirationDate }
-      : {}),
+    // I campi currencyId e offerFlagId non sono più gestiti qui
+    // ma potrebbero essere reintrodotti nel backend in futuro.
+    // is_on_sale è un altro campo che il backend si aspetta.
+    is_on_sale: payload.offerFlagId !== undefined,
   };
 }
 
@@ -356,6 +338,9 @@ export const shoppingQueryKeys = {
   lists: () => [...shoppingQueryKeys.all, 'lists'] as const,
   list: (listId: number) => [...shoppingQueryKeys.all, 'lists', listId] as const,
 
+  groups: () => [...shoppingQueryKeys.all, 'groups'] as const,
+  group: (groupId: number) => [...shoppingQueryKeys.all, 'groups', groupId] as const,
+
   items: (listId: number | null) =>
     [...shoppingQueryKeys.all, 'items', listId] as const,
 
@@ -365,16 +350,6 @@ export const shoppingQueryKeys = {
 
   config: () => [...shoppingQueryKeys.all, 'config'] as const,
   products: () => [...shoppingQueryKeys.all, 'products'] as const,
-
-  productSuggestions: (query: string) =>
-    [
-      ...shoppingQueryKeys.all,
-      'product-suggestions',
-      query.trim().toLowerCase(),
-    ] as const,
-
-  productInsights: (productId: number | null) =>
-    [...shoppingQueryKeys.all, 'product-insights', productId] as const,
 } as const;
 
 /* =========================
@@ -390,6 +365,17 @@ export async function fetchShoppingLists(
   });
 
   return (data ?? []).map(normalizeShoppingListSummary);
+}
+
+export async function fetchShoppingGroups(
+  signal?: AbortSignal
+): Promise<ShoppingGroup[]> {
+  const data = await apiRequest<ShoppingGroupApi[]>('/groups', {
+    method: 'GET',
+    signal,
+  });
+
+  return (data ?? []).map(normalizeShoppingGroup);
 }
 
 export async function fetchShoppingListItems(
@@ -503,19 +489,6 @@ export async function deleteShoppingListItem(
   });
 }
 
-export async function toggleShoppingListItemPurchased(
-  id: number,
-  _listId: number,
-  payload: ToggleShoppingListItemPurchasedPayload
-): Promise<ShoppingListItem> {
-  const data = await apiRequest<ShoppingListItemApi>(`/items/${id}`, {
-    method: 'PATCH',
-    body: { is_purchased: payload.isPurchased },
-  });
-
-  return normalizeShoppingListItem(data);
-}
-
 export async function createShoppingSupplier(
   payload: ShoppingSupplierCreatePayload
 ): Promise<ShoppingSupplierOption> {
@@ -545,27 +518,19 @@ export async function deleteShoppingSupplier(id: number): Promise<void> {
   });
 }
 
-export async function createShoppingPrice(
-  payload: ShoppingPriceCreatePayload
+// FIX: Funzioni allineate al refactoring (InventoryBatch)
+export async function addInventoryBatch(
+  itemId: number,
+  payload: InventoryBatchCreatePayload
 ): Promise<void> {
-  await apiRequest<void>('/prices', {
+  await apiRequest<void>(`/items/${itemId}/inventory-batches`, {
     method: 'POST',
-    body: serializeShoppingPriceCreatePayload(payload),
+    body: serializeInventoryBatchCreatePayload(payload),
   });
 }
 
-export async function updateShoppingPrice(
-  priceId: number,
-  payload: ShoppingPriceUpdatePayload
-): Promise<void> {
-  await apiRequest<void>(`/prices/${priceId}`, {
-    method: 'PUT',
-    body: serializeShoppingPriceUpdatePayload(payload),
-  });
-}
-
-export async function deleteShoppingPrice(priceId: number): Promise<void> {
-  await apiRequest<void>(`/prices/${priceId}`, {
+export async function deleteInventoryBatch(batchId: number): Promise<void> {
+  await apiRequest<void>(`/inventory-batches/${batchId}`, {
     method: 'DELETE',
   });
 }

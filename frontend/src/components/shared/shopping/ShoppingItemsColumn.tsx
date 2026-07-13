@@ -226,14 +226,24 @@ const ShoppingItemsColumn = forwardRef<
       });
     };
 
-    const handleTogglePurchased = async (item: ShoppingListItem) => {
-      await mutations.togglePurchased({
-        id: item.id,
-        listId: item.shoppingListId,
-        data: {
-          isPurchased: !item.isPurchased,
-        },
-      });
+    const handleTogglePurchased = (item: ShoppingListItem) => {
+      if (item.isPurchased) {
+        // L'articolo è già acquistato.
+        // Troviamo l'ultimo lotto di acquisto (inventory batch).
+        const lastBatch = item.inventoryBatches?.[item.inventoryBatches.length - 1];
+        if (lastBatch) {
+          // Chiediamo conferma prima di eliminare l'acquisto.
+          if (window.confirm(`Annullare l'acquisto per "${item.productName}"?`)) {
+            mutations.deletePrice({
+              batchId: lastBatch.id,
+              listId: item.shoppingListId,
+            });
+          }
+        }
+      } else {
+        // L'articolo non è acquistato, apriamo la modale per registrarlo.
+        handleOpenPurchase(item);
+      }
     };
 
     const handleOpenPurchase = (item: ShoppingListItem) => {

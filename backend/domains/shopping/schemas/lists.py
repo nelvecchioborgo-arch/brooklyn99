@@ -113,6 +113,16 @@ class ShoppingListItemUpdate(StrictBaseModel):
         return _truncate_2_decimals(value)
 
 
+class _ShoppingProductLiteResponse(ORMBaseModel):
+    id: int
+    name_normalized: str
+
+
+class _ShoppingUnitLiteResponse(ORMBaseModel):
+    id: int
+    code_name: str
+
+
 class ShoppingListItemResponse(ORMBaseModel):
     id: int
     shopping_list_id: int
@@ -129,17 +139,26 @@ class ShoppingListItemResponse(ORMBaseModel):
     deleted_at: Optional[datetime] = None
     inventory_batches: List[InventoryBatchResponse] = Field(default_factory=list)
 
+    # Relazioni ORM rese disponibili al modello Pydantic
+    # ma escluse dalla serializzazione pubblica.
+    product: Optional[_ShoppingProductLiteResponse] = Field(
+        default=None,
+        exclude=True,
+    )
+    unit: Optional[_ShoppingUnitLiteResponse] = Field(
+        default=None,
+        exclude=True,
+    )
+
     @computed_field
     @property
     def product_name(self) -> str:
-        product = getattr(self, "product", None)
-        return product.name_normalized if product else self.name_normalized
+        return self.product.name_normalized if self.product else self.name_normalized
 
     @computed_field
     @property
     def unit_name(self) -> Optional[str]:
-        unit = getattr(self, "unit", None)
-        return unit.code_name if unit else None
+        return self.unit.code_name if self.unit else None
 
 
 class ShoppingListResponse(ORMBaseModel):
@@ -158,5 +177,7 @@ class ShoppingListResponse(ORMBaseModel):
     items: List[ShoppingListItemResponse] = Field(default_factory=list)
 
 
+_ShoppingProductLiteResponse.model_rebuild()
+_ShoppingUnitLiteResponse.model_rebuild()
 ShoppingListItemResponse.model_rebuild()
 ShoppingListResponse.model_rebuild()

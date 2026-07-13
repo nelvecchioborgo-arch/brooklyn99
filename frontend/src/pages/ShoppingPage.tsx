@@ -16,30 +16,66 @@ const ShoppingPage: React.FC = () => {
 
   const {
     lists,
+    groups,
     items,
     suppliers,
     config,
     activeListId,
     activeList,
     setActiveListId,
+    groupsLoading,
     listsLoading,
     itemsLoading,
     isInitialLoading,
   } = useShoppingData();
 
   const unitOptions = config?.unitOptions ?? [];
-  const itemStatusOptions = config?.itemStatusOptions ?? [];
   const currencyOptions = config?.currencyOptions ?? [];
   const offerFlagOptions = config?.offerFlagOptions ?? [];
   const listVisibilityOptions = config?.visibilityOptions ?? [];
   const listStatusOptions = config?.listStatusOptions ?? [];
+  // FIX: il backend non fornisce itemStatusOptions, ma questi sì.
+  const groupRoleOptions = config?.groupRoleOptions ?? [];
+  const supplierStatusOptions = config?.supplierStatusOptions ?? [];
 
   const filteredItems = useMemo<ShoppingListItem[]>(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return items;
+    // Anti-Corruption Layer (ACL): Normalizziamo i dati dal backend (snake_case)
+    // al formato atteso dal frontend (camelCase) in un unico punto.
+    // Questo garantisce coerenza a tutti i componenti figli.
+    const mappedItems = items.map((item: any) => {
+      const normalizedItem: ShoppingListItem = {
+        ...item,
+        shoppingListId: item.shopping_list_id,
+        productName: item.product_name,
+        isPurchased: item.is_purchased,
+        unitId: item.unit_id,
+        unitCodeName: item.unit_code_name,
+        statusId: item.status_id,
+        productId: item.product_id,
+      };
 
-    return items.filter((item) => {
-      const name = item.productName.trim().toLowerCase();
+      // Calcoliamo i dati dell'ultimo acquisto dagli inventory_batches
+      if (item.inventory_batches && item.inventory_batches.length > 0) {
+        const sortedBatches = [...item.inventory_batches].sort(
+          (a, b) =>
+            new Date(b.purchase_date).getTime() -
+            new Date(a.purchase_date).getTime()
+        );
+        const lastBatch = sortedBatches[0];
+        normalizedItem.lastPurchaseDate = lastBatch.purchase_date;
+        normalizedItem.lastPrice = lastBatch.purchase_price;
+        normalizedItem.lastSupplierName = lastBatch.supplier_name;
+      }
+      return normalizedItem;
+    });
+
+    if (!searchQuery) {
+      return mappedItems;
+    }
+
+    const q = searchQuery.trim().toLowerCase();
+    return mappedItems.filter((item) => {
+      const name = (item.productName ?? '').trim().toLowerCase();
       return name.includes(q);
     });
   }, [items, searchQuery]);
@@ -105,9 +141,11 @@ const ShoppingPage: React.FC = () => {
               loadingLists={listsLoading}
               activeListId={activeListId}
               setActiveListId={handleSelectList}
-              groups={[]}
+              groups={groups}
               listVisibilityOptions={listVisibilityOptions}
               listStatusOptions={listStatusOptions}
+              groupRoleOptions={groupRoleOptions}
+              supplierStatusOptions={supplierStatusOptions}
             />
           </div>
         </aside>
@@ -168,7 +206,6 @@ const ShoppingPage: React.FC = () => {
                   items={filteredItems}
                   suppliers={suppliers}
                   unitOptions={unitOptions}
-                  itemStatusOptions={itemStatusOptions}
                   currencyOptions={currencyOptions}
                   offerFlagOptions={offerFlagOptions}
                   searchQuery={searchQuery}
