@@ -1,6 +1,6 @@
 // src/components/dashboard/TaskDetailModal.tsx
 import React, { useMemo } from 'react';
-import type { Task, TaskSummary } from '@/types';
+import type { DbTask, TaskSummary } from '@/types';
 import BaseModal from '@/components/shared/dialog/BaseModal'; 
 import { useConfirm } from '@/context/ConfirmContext';
 import { Badge } from '@/components/shared/utils/Badges';
@@ -10,7 +10,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import { TaskTreeNode } from '../utils/TaskTreeNode';
-import { buildTaskTree, type UITask } from '@/utils/taskUtils';
+import { buildTaskTree } from '@/utils/taskUtils';
+import type { UITask } from '@/types';
+import { formatToItalianShortDate } from '@/utils/dateUtils';
 
 interface TaskDetailModalProps {
   isOpen: boolean;
@@ -27,7 +29,7 @@ interface TaskDetailModalProps {
 const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ 
   isOpen, onClose, selectedTask, onToggleTask, onSelectTask, onEditClick, onAddSubtask, onTaskDeleted
 }) => {
-  const { toggleTask, deleteTask } = useTaskMutations<{ tasks: Task[] }>(['tasks']);
+  const { toggleTask, deleteTask } = useTaskMutations(['tasks']);
   const api = useApi();
   const { confirm } = useConfirm();
   const { user } = useAuth();
@@ -51,9 +53,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
   // 🪄 2. Troviamo il nodo "Radice" (Padre supremo) del task attualmente aperto
   const getRootUITask = (taskId: number): UITask | undefined => {
-    let current = tasks.find((t: Task) => t.id === taskId);
+    let current = tasks.find((t: DbTask) => t.id === taskId);
     while (current && current.parent_id != null) {
-      const parent = tasks.find((t: Task) => t.id === current!.parent_id);
+      const parent = tasks.find((t: DbTask) => t.id === current!.parent_id);
       if (parent) current = parent;
       else break;
     }
@@ -64,12 +66,12 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
   const rootUITask = getRootUITask(selectedTask.id);
 
-  const liveTask = tasks.find((t: Task) => t.id === selectedTask.id);
+  const liveTask = tasks.find((t: DbTask) => t.id === selectedTask.id);
   const isTaskDone = liveTask ? liveTask.fatto : selectedTask.done;
 
   const handleTaskToggle = async (taskId: number, isCurrentlyDone: boolean) => {
     // 1. Troviamo se ci sono sottotask dirette non completate
-    const activeSubtasks = tasks.filter((t: Task) => t.parent_id === taskId && !t.fatto);
+    const activeSubtasks = tasks.filter((t: DbTask) => t.parent_id === taskId && !t.fatto);
 
     // 2. Isoliamo l'azione effettiva di "toggle"
     const executeToggle = async () => {
@@ -188,7 +190,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
           </h2>
           <div className="flex items-center gap-2 mt-2">
             <span className={`text-sm font-bold ${isTaskDone ? 'text-gray-400' : 'text-red-500'}`}>
-              Scadenza: {selectedTask.deadline}
+              Scadenza: {selectedTask.deadline ? formatToItalianShortDate(selectedTask.deadline) : 'Nessuna'}
             </span>
           </div>
         </div>

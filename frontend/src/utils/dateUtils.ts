@@ -157,3 +157,37 @@ export const getLocalTodayStr = () => {
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
+
+  export const generateWeeksGrid = (
+  firstDayIdx: number, 
+  daysInMo: number
+): (number | null)[][] => {
+  const cells: (number | null)[] = [
+    ...Array(firstDayIdx).fill(null),
+    ...Array.from({ length: daysInMo }, (_, i) => i + 1)
+  ];
+  
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+  
+  const weeks: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    weeks.push(cells.slice(i, i + 7));
+  }
+  
+  return weeks;
+};
+
+
+//  Genera le etichette per l'header della pagina (es. "OGGI", "12 ottobre 2023")
+
+export const getAgendaDateLabels = (targetDate: Date) => {
+  const isToday = new Date().toDateString() === targetDate.toDateString();
+  const displayName = isToday 
+    ? "OGGI" 
+    : targetDate.toLocaleDateString('it-IT', { weekday: 'long' }).toUpperCase();
+  const formattedDate = targetDate.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  return { isToday, displayName, formattedDate };
+};

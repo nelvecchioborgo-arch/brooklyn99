@@ -1,7 +1,7 @@
 // src/hooks/useHabitLogs.ts
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useApi } from './useApi';
+import { api } from '@/api/apiService';
 import type { RoutinePeriod } from '@/components/day/RoutineColumn';
 
 // 1. LE TUE OTTIME INTERFACCE
@@ -19,12 +19,14 @@ interface LogDisplayItem {
 }
 
 export const useHabitLogs = (habitId?: number, periods?: RoutinePeriod[]) => {
-  const api = useApi();
 
   // 2. MAGIA REACT QUERY
   const { data: fullLogs = [], isLoading } = useQuery<HabitLogItem[]>({
     queryKey: ['habitLogs', habitId],
-    queryFn: () => api.get(`/habit-log?habit_id=${habitId}`),
+    queryFn: async () => {
+      const data = await api.get<HabitLogItem[]>(`/habit-log?habit_id=${habitId}`);
+      return data ?? [];
+    },
     enabled: !!habitId, 
   });
 

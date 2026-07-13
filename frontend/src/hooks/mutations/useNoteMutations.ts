@@ -1,6 +1,6 @@
 // frontend/src/hooks/mutations/useNoteMutations.ts
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
-import { useApi } from '../useApi';
+import { api } from '@/api/apiService';
 import type { LocalNoteEntry, NoteVariant, DailyEntry } from '@/types';
 
 // Il "contratto": la cache che usa questo hook DEVE avere un array 'note'
@@ -9,7 +9,6 @@ export interface CacheWithNotes {
 }
 
 export function useNoteMutations<T extends CacheWithNotes>(queryKey: QueryKey) {
-  const api = useApi();
   const queryClient = useQueryClient();
 
   const saveNoteMutation = useMutation({
@@ -17,9 +16,11 @@ export function useNoteMutations<T extends CacheWithNotes>(queryKey: QueryKey) {
       if (!note.text.trim()) return Promise.resolve(null);
 
       const payload = { data_riferimento: note.dateStr, tipo: note.variant, testo: note.text };
-      return note.id && !note.isNew 
+      const result = note.id && !note.isNew 
         ? await api.patch<DailyEntry>(`/daily-entries/${note.id}`, payload)
         : await api.post<DailyEntry>('/daily-entries', payload);
+        
+      return result;
     },
     
     onMutate: async (newNote) => {
@@ -83,7 +84,10 @@ export function useNoteMutations<T extends CacheWithNotes>(queryKey: QueryKey) {
   });
 
   const deleteNoteMutation = useMutation({
-    mutationFn: (id: number) => api.delete(`/daily-entries/${id}`),
+    mutationFn: async (id: number) => {
+       await api.delete(`/daily-entries/${id}`);
+       return id; 
+    },
     
     // 🚀 OPTIMISTIC DELETE IN RAM
     onMutate: async (deletedId) => {

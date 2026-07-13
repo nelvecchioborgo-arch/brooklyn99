@@ -42,7 +42,6 @@ def get_day_sync(db: Session, current_user, data_riferimento: date) -> SyncDayRe
     categories, tasks, daily entries (obiettivo/priorita/note),
     countdowns, habits, eventi (espansi per rrule), shopping lists.
     """
-    # ── Categories ──
     categories_db = (
         db.query(models.Category)
         .filter(models.Category.user_id.is_(None) | (models.Category.user_id == current_user.id))
@@ -50,7 +49,6 @@ def get_day_sync(db: Session, current_user, data_riferimento: date) -> SyncDayRe
         .all()
     )
 
-    # ── Tasks (attivi + completati di recente) ──
     lookback_threshold = datetime.now(UTC) - timedelta(days=DEFAULT_COMPLETED_TASK_LOOKBACK_DAYS)
     tasks_db = (
         db.query(models.Task)
@@ -66,7 +64,6 @@ def get_day_sync(db: Session, current_user, data_riferimento: date) -> SyncDayRe
     )
     _populate_task_category_name(tasks_db)
 
-    # ── Daily entries (obiettivo / priorita / note) ──
     entries_db = (
         db.query(models.DailyEntry)
         .filter(
@@ -77,11 +74,10 @@ def get_day_sync(db: Session, current_user, data_riferimento: date) -> SyncDayRe
         .all()
     )
 
-    # 🪄 FIX: Array rinominato in obiettivi (plurale)
     obiettivi = []
     priorita = []
     note = []
-    
+
     for entry in entries_db:
         if entry.tipo in ["OD", "Obiettivo"]:
             obiettivi.append(entry)
@@ -90,7 +86,6 @@ def get_day_sync(db: Session, current_user, data_riferimento: date) -> SyncDayRe
         elif entry.tipo in ["N1", "N2", "N3", "N4", "Nota"]:
             note.append(entry)
 
-    # ── Countdowns ──
     countdowns_db = (
         db.query(models.Countdown)
         .filter(models.Countdown.user_id == current_user.id)
@@ -102,7 +97,6 @@ def get_day_sync(db: Session, current_user, data_riferimento: date) -> SyncDayRe
         .all()
     )
 
-    # ── Habits (con periods e logs filtrati per data_riferimento) ──
     habits_db = (
         db.query(models.Habit)
         .options(
@@ -121,7 +115,6 @@ def get_day_sync(db: Session, current_user, data_riferimento: date) -> SyncDayRe
         .all()
     )
 
-    # ── Events (con category, espansi per rrule) ──
     eventi_db = (
         db.query(models.Event)
         .filter(models.Event.user_id == current_user.id)
@@ -133,14 +126,15 @@ def get_day_sync(db: Session, current_user, data_riferimento: date) -> SyncDayRe
     eventi_espansi = expand_events_for_range(eventi_db, data_riferimento, data_riferimento)
     eventi_espansi.sort(key=lambda event: _to_utc_naive(event.data_inizio))
 
-    # ── Shopping lists (con items, prices, suppliers) ──
+    # Shopping lists riallineate al refactor:
+    # rimossi prices/supplier, mantenute solo relazioni ORM ancora esistenti.
     shopping_db = (
         db.query(models.ShoppingList)
         .filter(models.ShoppingList.owner_id == current_user.id)
         .options(
-            selectinload(models.ShoppingList.items)
-            .selectinload(models.ShoppingListItem.prices)
-            .selectinload(models.ShoppingPrice.supplier),
+            selectinload(models.ShoppingList.items).selectinload(models.ShoppingListItem.product),
+            selectinload(models.ShoppingList.items).selectinload(models.ShoppingListItem.unit),
+            selectinload(models.ShoppingList.items).selectinload(models.ShoppingListItem.inventory_batches),
             selectinload(models.ShoppingList.items).selectinload(models.ShoppingListItem.created_by_user),
             selectinload(models.ShoppingList.items).selectinload(models.ShoppingListItem.updated_by_user),
         )
@@ -148,7 +142,6 @@ def get_day_sync(db: Session, current_user, data_riferimento: date) -> SyncDayRe
         .all()
     )
 
-    # ── Risposta aggregata (validazione Pydantic V2 manuale) ──
     return SyncDayResponse(
         data_riferimento=data_riferimento,
         obiettivi=[DailyEntryResponse.model_validate(o) for o in obiettivi],
@@ -162,17 +155,16 @@ def get_day_sync(db: Session, current_user, data_riferimento: date) -> SyncDayRe
         countdowns=[CountdownResponse.model_validate(c) for c in countdowns_db],
     )
 
+
 def get_week_sync(db: Session, current_user: models.User, start_date: date, end_date: date) -> SyncWeekResponse:
     """
     Aggrega tutti i dati di una data settimana per l'utente corrente.
     """
-    # 1. Recupera le Entries Settimanali (Lunedì)
     weekly_entries_db = (
         db.query(models.DailyEntry)
         .filter(
             models.DailyEntry.user_id == current_user.id,
             models.DailyEntry.data_riferimento == start_date,
-            # 🪄 FIX: Sostituiti OS/PS con OW/PW (Objective Week / Priority Week) come stabilito!
             models.DailyEntry.tipo.in_(["OW", "PW", "EP", "EN"])
         )
         .order_by(models.DailyEntry.id.asc())
@@ -185,16 +177,15 @@ def get_week_sync(db: Session, current_user: models.User, start_date: date, end_
     eventi_negativi = []
 
     for entry in weekly_entries_db:
-        if entry.tipo == "OW": # 🪄 FIX: OW
+        if entry.tipo == "OW":
             obiettivo_settimanale = entry
-        elif entry.tipo == "PW": # 🪄 FIX: PW
+        elif entry.tipo == "PW":
             priorita_settimanali.append(entry)
         elif entry.tipo == "EP":
             eventi_positivi.append(entry)
         elif entry.tipo == "EN":
             eventi_negativi.append(entry)
 
-    # 2. Recupera le Note di TUTTA la settimana
     note_settimanali_db = (
         db.query(models.DailyEntry)
         .filter(
@@ -207,7 +198,6 @@ def get_week_sync(db: Session, current_user: models.User, start_date: date, end_
         .all()
     )
 
-    # 3. Recupera Eventi della settimana
     eventi_db = (
         db.query(models.Event)
         .filter(models.Event.user_id == current_user.id)
@@ -218,7 +208,6 @@ def get_week_sync(db: Session, current_user: models.User, start_date: date, end_
     eventi_espansi = expand_events_for_range(eventi_db, start_date, end_date)
     eventi_espansi.sort(key=lambda event: _to_utc_naive(event.data_inizio))
 
-    # 4. Recupera i Task pendenti o in scadenza nella settimana
     lookback_threshold = datetime.now(UTC) - timedelta(days=DEFAULT_COMPLETED_TASK_LOOKBACK_DAYS)
     tasks_db = (
         db.query(models.Task)
@@ -234,7 +223,6 @@ def get_week_sync(db: Session, current_user: models.User, start_date: date, end_
     )
     _populate_task_category_name(tasks_db)
 
-    # 5. Ritorna i dati formattati
     return SyncWeekResponse(
         start_date=start_date,
         end_date=end_date,

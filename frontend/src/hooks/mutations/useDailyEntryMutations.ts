@@ -1,6 +1,6 @@
 // frontend/src/hooks/mutations/useDailyEntryMutations.ts
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
-import { useApi } from '../useApi';
+import { api } from '@/api/apiService';
 import type { DailyEntry } from '@/types';
 
 export interface SaveDailyEntryPayload {
@@ -20,7 +20,6 @@ export interface CacheWithDailyEntries {
 }
 
 export function useDailyEntryMutations<T extends CacheWithDailyEntries>(queryKey: QueryKey) {
-  const api = useApi();
   const queryClient = useQueryClient();
 
   const saveEntryMutation = useMutation({
@@ -30,10 +29,16 @@ export function useDailyEntryMutations<T extends CacheWithDailyEntries>(queryKey
         await api.delete(`/daily-entries/${payload.id}`);
         return { deleted: true, id: payload.id };
       }
+      
       if (!payload.text.trim()) return null;
-      return payload.id 
-        ? await api.patch<DailyEntry>(`/daily-entries/${payload.id}`, data) 
+      
+      // Essendo che api.patch/post ora ritornano Promise<T | null>, 
+      // si incastra perfettamente con il tuo onSuccess!
+      const result = payload.id 
+        ? await api.patch<DailyEntry>(`/daily-entries/${payload.id}`, data)
         : await api.post<DailyEntry>('/daily-entries', data);
+        
+      return result;
     },
     onMutate: async (payload) => {
       await queryClient.cancelQueries({ queryKey });
@@ -101,5 +106,9 @@ export function useDailyEntryMutations<T extends CacheWithDailyEntries>(queryKey
     },
   });
 
-  return { saveDailyEntry: saveEntryMutation.mutate };
+  return { 
+    saveDailyEntry: saveEntryMutation.mutate, 
+    saveDailyEntryAsync: saveEntryMutation.mutateAsync 
+  };
+  
 }
