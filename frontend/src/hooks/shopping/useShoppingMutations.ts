@@ -7,31 +7,26 @@ import {
   createShoppingListItem,
   updateShoppingListItem,
   deleteShoppingListItem,
-  toggleShoppingListItemPurchased,
   createShoppingSupplier,
   updateShoppingSupplier,
   deleteShoppingSupplier,
-  createShoppingPrice,
-  updateShoppingPrice,
-  deleteShoppingPrice,
+  addInventoryBatch,
+  deleteInventoryBatch,
   shoppingQueryKeys,
 } from '@/api/shoppingApi';
 
 import type {
   ShoppingListCreatePayload,
-  ShoppingListUpdatePayload,
   ShoppingListItem,
   ShoppingListItemCreatePayload,
-  ShoppingListItemUpdatePayload,
   ShoppingSupplierCreatePayload,
-  ShoppingSupplierUpdatePayload,
-  ShoppingPriceCreatePayload,
+  InventoryBatchCreatePayload,
   UpdateShoppingListArgs,
   UpdateShoppingListItemArgs,
   DeleteShoppingListItemArgs,
-  ToggleShoppingListItemPurchasedArgs,
   UpdateShoppingSupplierArgs,
-  UpdateShoppingPriceArgs,
+  AddInventoryBatchArgs,
+  DeleteInventoryBatchArgs,
   UseShoppingMutationsResult,
 } from '@/types/shopping';
 
@@ -143,22 +138,6 @@ export const useShoppingMutations = (): UseShoppingMutationsResult => {
     },
   });
 
-  const togglePurchasedMutation = useMutation({
-    mutationFn: ({ id, listId, data }: ToggleShoppingListItemPurchasedArgs) =>
-      toggleShoppingListItemPurchased(id, listId, data),
-    onSuccess: async (
-      updatedItem,
-      vars: ToggleShoppingListItemPurchasedArgs
-    ) => {
-      replaceItemInCache(vars.listId, updatedItem);
-
-      await Promise.all([
-        invalidateLists(),
-        invalidateItems(vars.listId),
-      ]);
-    },
-  });
-
   const createSupplierMutation = useMutation({
     mutationFn: (payload: ShoppingSupplierCreatePayload) =>
       createShoppingSupplier(payload),
@@ -182,36 +161,22 @@ export const useShoppingMutations = (): UseShoppingMutationsResult => {
     },
   });
 
-  const addPriceMutation = useMutation({
-    mutationFn: (payload: ShoppingPriceCreatePayload) =>
-      createShoppingPrice(payload),
-    onSuccess: async (_data, vars: ShoppingPriceCreatePayload) => {
+  const addInventoryBatchMutation = useMutation({
+    mutationFn: ({ itemId, data }: AddInventoryBatchArgs) =>
+      addInventoryBatch(itemId, data),
+    onSuccess: async (_data, vars: AddInventoryBatchArgs) => {
       await Promise.all([
         invalidateLists(),
-        invalidateItems(vars.shoppingListId),
+        invalidateItems(vars.listId),
       ]);
     },
   });
 
-  const updatePriceMutation = useMutation({
-    mutationFn: ({ priceId, data }: UpdateShoppingPriceArgs) =>
-      updateShoppingPrice(priceId, data),
-    onSuccess: async (_data, vars: UpdateShoppingPriceArgs) => {
-      await invalidateLists();
-
-      if (typeof vars.listId === 'number') {
-        await invalidateItems(vars.listId);
-        return;
-      }
-
-      await invalidateAllItems();
-    },
-  });
-
-  const deletePriceMutation = useMutation({
-    mutationFn: (priceId: number) => deleteShoppingPrice(priceId),
-    onSuccess: async () => {
-      await Promise.all([invalidateLists(), invalidateAllItems()]);
+  const deleteInventoryBatchMutation = useMutation({
+    mutationFn: ({ batchId, listId }: DeleteInventoryBatchArgs) =>
+      deleteInventoryBatch(batchId),
+    onSuccess: async (_data, vars: DeleteInventoryBatchArgs) => {
+      await Promise.all([invalidateLists(), invalidateItems(vars.listId)]);
     },
   });
 
@@ -233,9 +198,6 @@ export const useShoppingMutations = (): UseShoppingMutationsResult => {
     deleteItem: (args: DeleteShoppingListItemArgs) =>
       deleteItemMutation.mutateAsync(args),
 
-    togglePurchased: (args: ToggleShoppingListItemPurchasedArgs) =>
-      togglePurchasedMutation.mutateAsync(args),
-
     createSupplier: (payload: ShoppingSupplierCreatePayload) =>
       createSupplierMutation.mutateAsync(payload),
 
@@ -244,13 +206,10 @@ export const useShoppingMutations = (): UseShoppingMutationsResult => {
 
     deleteSupplier: (id: number) => deleteSupplierMutation.mutateAsync(id),
 
-    addPrice: (payload: ShoppingPriceCreatePayload) =>
-      addPriceMutation.mutateAsync(payload),
+    addInventoryBatch: (args: AddInventoryBatchArgs) =>
+      addInventoryBatchMutation.mutateAsync(args),
 
-    updatePrice: (args: UpdateShoppingPriceArgs) =>
-      updatePriceMutation.mutateAsync(args),
-
-    deletePrice: (priceId: number) =>
-      deletePriceMutation.mutateAsync(priceId),
+    deleteInventoryBatch: (args: DeleteInventoryBatchArgs) =>
+      deleteInventoryBatchMutation.mutateAsync(args),
   };
 };

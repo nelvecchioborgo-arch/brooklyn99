@@ -234,7 +234,7 @@ const ShoppingItemsColumn = forwardRef<
         if (lastBatch) {
           // Chiediamo conferma prima di eliminare l'acquisto.
           if (window.confirm(`Annullare l'acquisto per "${item.productName}"?`)) {
-            mutations.deletePrice({
+            mutations.deleteInventoryBatch({
               batchId: lastBatch.id,
               listId: item.shoppingListId,
             });
@@ -265,9 +265,9 @@ const ShoppingItemsColumn = forwardRef<
       if (activeListId == null) return;
       if (!purchaseForm.price) return;
 
-      await mutations.addPrice({
-        shoppingListId: activeListId,
-        shoppingListItemId: purchaseModal.data.id,
+      await mutations.addInventoryBatch({
+        itemId: purchaseModal.data.id,
+        listId: activeListId,
         productId: purchaseModal.data.productId,
         supplierId: purchaseForm.supplierId
           ? Number(purchaseForm.supplierId)
@@ -312,7 +312,7 @@ const ShoppingItemsColumn = forwardRef<
         <div className={`${shoppingCardClass} min-h-0 flex-1 overflow-hidden p-0`}>
           <ShoppingItemsList
             items={filteredItems}
-            loading={loading}
+          loading={loading && items.length === 0}
             containerRef={containerRef}
             onEdit={handleOpenEdit}
             onDelete={handleDelete}

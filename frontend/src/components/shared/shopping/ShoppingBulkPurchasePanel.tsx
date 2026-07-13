@@ -277,9 +277,9 @@ const ShoppingBulkPurchasePanel: React.FC<ShoppingBulkPurchasePanelProps> = ({
     );
 
     try {
-      await mutations.addPrice({
-        shoppingListId: activeList.id,
-        shoppingListItemId: item.id,
+      await mutations.addInventoryBatch({
+        itemId: item.id,
+        listId: activeList.id,
         productId: item.productId,
         supplierId: form.supplierId ? Number(form.supplierId) : undefined,
         purchaseDate: form.purchaseDate,
